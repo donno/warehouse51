@@ -1,0 +1,18 @@
+# An nmake Makefile for building wordmatch
+
+# Variables
+cxx=cl
+cxxflags=/nologo /EHsc /Zi /O2 /c
+link=link
+
+# Targets
+all: wordmatch.exe
+
+wordmatch.cpp: wordlist.hpp wordlistiterator.hpp
+  $(cc) $(cdebug) $(cflags) $(cvars) $*.cpp
+
+wordmatch.obj: wordmatch.cpp
+  $(cxx) $(cdebug) $(cxxflags) $(cvars) /Fo:wordmatch.obj wordmatch.cpp
+
+wordmatch.exe wordmatch.pdb: wordmatch.obj
+  $(link) /nologo /debug /PDB:wordmatch.pdb wordmatch.obj -out:wordmatch.exe
