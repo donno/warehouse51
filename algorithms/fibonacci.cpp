@@ -21,16 +21,19 @@
 //                    std::accumulate(g.begin(), g.end(10), 0)
 //
 //===----------------------------------------------------------------------===//
-class FibonacciGenerator
+
+#include <iterator>
+
+class FibonacciGenerator : public std::iterator<std::forward_iterator_tag,
+                                                unsigned long>
 {
   // last and secondlast is used in the calcuations.
-  unsigned long last;
-  unsigned long secondlast;
+  value_type last;
+  value_type secondlast;
 
   // This is used for dealing with iteration.
   // n keeps track of the which 'n'-th fibiancii number we are up to.
   unsigned int n;
-
 
 public:
   FibonacciGenerator();
@@ -38,7 +41,7 @@ public:
   FibonacciGenerator& operator ++();
 
   // Returns the 'n-th' fibinacii number.
-  unsigned long operator *() const { return secondlast; }
+  value_type operator *() const { return secondlast; }
 
   bool operator !=(const FibonacciGenerator& That) const
   {
@@ -88,7 +91,8 @@ int main()
 {
   FibonacciGenerator g;
   std::cout << "Fibonacci: ";
-  std::for_each(g.begin(), g.end(10), [](int fib){ std::cout << fib << " "; });
+  std::ostream_iterator<FibonacciGenerator::value_type> out(std::cout, " ");
+  std::copy(g.begin(), g.end(10), out);
   std::cout << std::endl;
 
   std::cout << "Sum of first 10 Fibonacci numbers: "
