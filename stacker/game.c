@@ -156,8 +156,6 @@ void DrawGame(SDL_Surface *screen) {
         }
         player.moveCount = PLAYER_DEF_MOVECOUNT;
     }
-
-    SDL_Flip(screen);
 }
 
 void SetupStateGame(struct State *state) {
