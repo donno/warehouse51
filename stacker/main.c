@@ -7,7 +7,7 @@
     Version: 0.2
 */
 
-#include <SDL/SDL.h>
+#include "SDL.h"
 #include <stdio.h>
 #include "state.h"
 
@@ -30,10 +30,15 @@ unsigned int State;
 /**
     Game Loop - Main working loop
 
-    Features the spalsh loop, followed by the core game loop
-    \param screen pointer ot the SDL_Surface representing the screen
+    Features the splash loop, followed by the core game loop
+    \param window pointer to the SDL_WIndow providing the window
+    \param renderer pointer to the SDL_Render providing the renderer
+    \param texture pointer to the SDL_Texture providing a texture.
+    \param screen pointer to the SDL_Surface representing the screen
 */
-void GameLoop(SDL_Surface *screen) {
+void GameLoop(SDL_Window* window, SDL_Renderer *renderer, SDL_Texture *texture,
+              SDL_Surface *screen)
+{
     int bQuit = 0;
     SDL_Event event;
     Uint8 appState;
@@ -60,7 +65,10 @@ void GameLoop(SDL_Surface *screen) {
     states[State].funcInit();
     states[State].funcDraw(screen);
 
-    SDL_Flip(screen);
+    SDL_UpdateTexture(texture, NULL, screen->pixels, screen->pitch);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
 
     // Main Game loop
     while( bQuit == 0 ) {
@@ -78,13 +86,17 @@ void GameLoop(SDL_Surface *screen) {
             }
         }
         states[State].funcDraw(screen);
-        SDL_Flip(screen);
 
-        // This will put the app to sleep if its not active
-        // Very good for when u minimize it
-        appState = SDL_GetAppState();
-        if ((appState == SDL_APPACTIVE) || (!appState) )  {
-            SDL_Delay(1000) ;
+        SDL_UpdateTexture(texture, NULL, screen->pixels, screen->pitch);
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_RenderPresent(renderer);
+
+        // If the application is minimised put the game to sleep. This way
+        // it won't use as many CPU cycles.
+        if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
+        {
+          SDL_Delay(1000);
         }
     }
 }
@@ -97,7 +109,10 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 int main(int argc, char *argv[])
 #endif
 {
+    SDL_Window *window;
     SDL_Surface *screen;
+    SDL_Renderer *renderer;
+    SDL_Texture *texture;
 
     // Initialize the SDL library
     if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) {
@@ -105,17 +120,38 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    SDL_WM_SetCaption( GAME_NAME , GAME_NAME );
-    screen = SDL_SetVideoMode(720, 576, 0, SDL_DOUBLEBUF);
+    window = SDL_CreateWindow(GAME_NAME,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              720, 576,
+                              0);
 
+    if ( window == NULL ) {
+        fprintf(stderr, "Unable to create window: %s\n",SDL_GetError());
+        return -2;
+    }
+
+    renderer = SDL_CreateRenderer(window, -1, 0);
+    if ( renderer == NULL ) {
+        fprintf(stderr, "Unable to create renderer: %s\n",SDL_GetError());
+        return -4;
+    }
+
+    screen = SDL_CreateRGBSurface(0, 720, 576, 32, 0, 0, 0, 0);
     if ( screen == NULL ) {
-        fprintf(stderr,"Unable to set video mode: %s\n",SDL_GetError() );
-        return -3;
+        fprintf(stderr, "Unable to create surface: %s\n",SDL_GetError());
+        return -5;
+    }
+
+    texture = SDL_CreateTextureFromSurface(renderer, screen);
+    if ( texture == NULL ) {
+        fprintf(stderr, "Unable to create texture: %s\n",SDL_GetError());
+        return -6;
     }
 
     SetupStateGame( &states[0]);
 
-    GameLoop(screen);
+    GameLoop(window, renderer, texture, screen);
 
     SDL_Quit();
     return 0;

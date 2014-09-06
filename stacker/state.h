@@ -1,7 +1,7 @@
 #ifndef STATE_H_GUARD
 #define STATE_H_GUARD
 
-#include <SDL/SDL.h>
+#include <SDL.h>
   
 #if _MSC_VER < 1800
 #define bool int

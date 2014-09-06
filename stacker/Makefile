@@ -20,7 +20,7 @@ else
 endif
 ifeq ($(CC),cl)
   CFLAGS:=/nologo /c /EHsc
-  LDFLAGS:=/nologo sdl.lib
+  LDFLAGS:=/nologo sdl2.lib
   LD:=link
   EXEEXT:=.exe
 endif
