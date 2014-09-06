@@ -8,6 +8,7 @@
 */
 
 #include <SDL/SDL.h>
+#include <stdio.h>
 #include "state.h"
 
 #define GAME_NAME "Stackers"
