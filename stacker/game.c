@@ -41,9 +41,9 @@ void InitGame(void) {
     block = blockOrange;
 
     SDL_FillRect(blockOrange , &block->clip_rect, SDL_MapRGB(block->format, 220,100,32));
-    SDL_FillRect(blockGreen  , &block->clip_rect, 0xFF7E00);
+    SDL_FillRect(blockGreen  , &block->clip_rect, SDL_MapRGB(block->format, 123,194,0));
     SDL_FillRect(blockRed    , &block->clip_rect, SDL_MapRGB(block->format, 184,32,32));
-    SDL_FillRect(player.block, &player.block->clip_rect, 0x007EFF);
+    SDL_FillRect(player.block, &player.block->clip_rect, SDL_MapRGB(block->format, 123,222,255));
 
     for (x = 0; x < TOWER_WIDTH; x++) {
         for (y = 0; y < TOWER_HEIGHT; y++) {
