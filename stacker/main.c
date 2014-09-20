@@ -153,6 +153,11 @@ int main(int argc, char *argv[])
 
     GameLoop(window, renderer, texture, screen);
 
+    SDL_FreeSurface(screen);
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+
     SDL_Quit();
     return 0;
 }
