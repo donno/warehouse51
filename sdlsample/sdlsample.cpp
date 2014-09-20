@@ -9,9 +9,9 @@
 //
 // Uses OpenGL 3/4 functions via gl3w (https://github.com/shakesoda/gl3w).
 //
-// This sends three points to OpenGL which gets renders as a triangle.
+// This sends two points to OpenGL each of witch gets rendered as a triangle
+// thanks to the geometry shader.
 // The triangle is coloured blue by a fragment shader.
-// The triangle doesn't touch y = -1.0 anymore due to a geometry shader.
 //
 //===----------------------------------------------------------------------===//
 
@@ -171,10 +171,9 @@ ShaderProgram::~ShaderProgram()
 }
 
 // An array of 3 points which represents 3 vertices
-static const GLfloat Points[] = {
-   -1.0f, -1.0f, 0.0f,
-   1.0f, -1.0f, 0.0f,
-   0.0f,  1.0f, 0.0f,
+static const GLfloat Points[][3] = {
+  { -0.5f, -0.5f, -0.5f },
+  { 0.0f, 0.0f, -0.5f },
 };
 
 void HandleEvent(const SDL_Event& Event)
@@ -256,8 +255,7 @@ int main(int argc, char *argv[])
         0,        // stride
         (void*) 0  // array buffer offset
         );
-
-      glDrawArrays(GL_TRIANGLES, 0, 3);
+      glDrawArrays(GL_POINTS, 0, 2);
       glDisableVertexAttribArray(0);
     }
 
