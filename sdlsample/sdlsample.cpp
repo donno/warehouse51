@@ -11,8 +11,7 @@
 //
 // This sends three points to OpenGL which gets renders as a triangle.
 // The triangle is coloured blue by a fragment shader.
-//
-// TODO: Add support to load and use a geometry shader.
+// The triangle doesn't touch y = -1.0 anymore due to a geometry shader.
 //
 //===----------------------------------------------------------------------===//
 
@@ -31,13 +30,16 @@ class ShaderProgram
 {
   GLuint myVertexShader;
   GLuint myFragmentShader;
+  GLuint myGeometryShader;
   GLuint myShaderProgram;
 
   // Read the entire contents of a file into a string.
   static std::string Read(const char* FilePath);
 
 public:
-  ShaderProgram(const char* VertexFilePath, const char* FragmentFilePath);
+  ShaderProgram(const char* VertexFilePath,
+                const char* FragmentFilePath,
+                const char* GeometryFilePath = nullptr);
   ~ShaderProgram();
 
   operator GLuint() { return myShaderProgram; }
@@ -63,9 +65,11 @@ std::string ShaderProgram::Read(const char* FilePath)
 
 ShaderProgram::ShaderProgram(
   const char* VertexFilePath,
-  const char* FragmentFilePath)
+  const char* FragmentFilePath,
+  const char* GeometryFilePath)
   : myVertexShader(0),
     myFragmentShader(0),
+    myGeometryShader(0),
     myShaderProgram(0)
 {
   // TODO: Make the following exception safe to ensure CreateShader is reversed
@@ -116,11 +120,34 @@ ShaderProgram::ShaderProgram(
     }
   }
 
+  // Create the optional geometry shader shader.
+  if (GeometryFilePath)
+  {
+    const std::string geometryShaderSource = Read(GeometryFilePath);
+    const char * const source = geometryShaderSource.c_str();
+
+    myGeometryShader = glCreateShader(GL_GEOMETRY_SHADER);
+    glShaderSource(myGeometryShader, 1, (const GLchar**) &source, 0);
+
+    glCompileShader(myGeometryShader);
+
+    // Check the shader.
+    glGetShaderiv(myGeometryShader, GL_COMPILE_STATUS, &result);
+    glGetShaderiv(myGeometryShader, GL_INFO_LOG_LENGTH, &logLength);
+    if (result == GL_FALSE || logLength > 1)
+    {
+      std::unique_ptr<char[]> errorMessage(new char[logLength]);
+      glGetShaderInfoLog(myGeometryShader, logLength, nullptr, errorMessage.get());
+      fprintf(stdout, "%s\n", errorMessage.get());
+    }
+  }
+
   // Compile the shaders.
   myShaderProgram = glCreateProgram();
 
   glAttachShader(myShaderProgram, myFragmentShader);
   glAttachShader(myShaderProgram, myVertexShader);
+  if (GeometryFilePath) glAttachShader(myShaderProgram, myGeometryShader);
 
   glLinkProgram(myShaderProgram);
 
@@ -205,7 +232,7 @@ int main(int argc, char *argv[])
   glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
   glBufferData(GL_ARRAY_BUFFER, sizeof(Points), Points, GL_STATIC_DRAW);
 
-  ShaderProgram program("example.vert", "example.frag");
+  ShaderProgram program("example.vert", "example.frag", "example.geom");
 
   glUseProgram(program);
 
