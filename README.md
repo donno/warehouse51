@@ -10,6 +10,7 @@ Projects
 * algorithms - C++ - A collection of algorithms written in C++.
   * collatz - Provides a forward iterator over the sequence produced by the Collatz conjecture.
   * fibonacci - Provided a forward iterator over the Fibonacci sequence.
+* peparser - Python/JavaScript - Parses the PE/COFF format commonly used for executables.
 * wordmatch - C++ - Matches a sequence of letters to a word. This is inspired to be a solver for Countdown.
 
 Authors
