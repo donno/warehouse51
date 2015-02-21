@@ -304,9 +304,16 @@ function writeBitmapToFile()
 
   var bitmapIndex = 0;
 
+  try
+  {
+    fs.mkdirSync('output');
+  }
+  catch (e) {}
+
   function writeFile(bitmapData)
   {
-    var fd = fs.openSync('image_' + bitmapIndex.toString() + '.bmp', 'w');
+    var fd = fs.openSync('output/image_' + bitmapIndex.toString() + '.bmp',
+                         'w');
     fs.write(fd, bmpHeader, 0, bmpHeader.length, 0, function(err,written){});
     fs.write(fd, bitmapData, 0, bitmapData.length, bmpHeader.length,
              function(err,written){});
