@@ -337,6 +337,7 @@ if (require.main === module) {
 //========================================================================================
 
 exports.parseFile = parsePeFile;
+exports.forEachBitmap = forEachBitmap ;
 exports.structures = {
   'DosHeader': dosHeader,
   'NtHeader': ntHeader,
