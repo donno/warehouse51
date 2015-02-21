@@ -29,7 +29,7 @@ For JavaScript/Browser (pe.html)
 `$ npm install browserify`
 `$ browserify pe-html -o pe-html-bundle.js`
 
-Open pe.html in a web browser, select an executable file and it will output some
+Open peparser.html in a web browser, select an executable file and it will output some
 data.
 
 Working
