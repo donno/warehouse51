@@ -280,6 +280,11 @@ function forEachBitmap(peData, callback, addHeader)
       // Append the bitmap header.
       if (addHeader)
       {
+        // Modify the bmpHeader to include the correct file size.
+        var bmpSize = bitmapData.length + bmpHeader.length;
+        bmpHeader[2] = (bmpSize & 0xFF);
+        bmpHeader[3] = ((bmpSize >> 8) & 0xFF);
+
         entryData = Buffer.concat([bmpHeader, entryData]);
       }
       callback(entryData);
@@ -311,6 +316,12 @@ function writeBitmapToFile(fs)
   {
     var fd = fs.openSync('output/image_' + bitmapIndex.toString() + '.bmp',
                          'w');
+
+    // Modify the bmpHeader to include the correct file size.
+    var bmpSize = bitmapData.length + bmpHeader.length;
+    bmpHeader[2] = (bmpSize & 0xFF);
+    bmpHeader[3] = ((bmpSize >> 8) & 0xFF);
+
     fs.write(fd, bmpHeader, 0, bmpHeader.length, 0, function(err,written){});
     fs.write(fd, bitmapData, 0, bitmapData.length, bmpHeader.length,
              function(err,written){});
