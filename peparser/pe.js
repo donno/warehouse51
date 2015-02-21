@@ -245,6 +245,7 @@ function parsePeFile(data)
     'peHeader': peHeaderFromData,
     'sectionHeaders': sectionHeadersFromData,
     'resourceSection': resourceSection,
+    'resourceDirectoryTable': resourceDirectoryTableFromData,
     'bitmapDirectoryTable': bitmapDirectoryTableFromData,
     'rawData': data,
   }
