@@ -2289,31 +2289,27 @@ function formatWithNames(structure, fields, dest)
   for (var item = structure.next; item; item = item.next)
   {
     dest.innerHTML +=
-      '<tr><td>' + item.varName + '</td><td>' + fields[item.varName] + '</td></tr>';
+      '<tr><td>' + item.varName + '</td><td>' + fields[item.varName] +
+      '</td></tr>';
   }
 };
 
 function fileProvided(file)
 {
-  var b = Buffer;
-
   var reader = new FileReader();
   reader.addEventListener("loadend", function(event) {
     // reader.result contains the contents of blob as a typed array
     var data = new Int8Array(event.target.result);
     var peData = pe.parseFile(data);
-    //forEachBitmap(peData, writeBitmapToImageOnScreen(), true);
-    
+
     var dest = document.getElementById('pe-results');
     formatWithNames(pe.structures.DosHeader, peData.dosHeader, dest);
-    
+
     var peHeaderStructure = pe.structures.NtHeader.next.options.type;
     formatWithNames(peHeaderStructure, peData.ntHeader.Main, dest);
 
     var optionalHeaderStructure = pe.structures.NtHeader.next.next.options.type;
     formatWithNames(optionalHeaderStructure, peData.ntHeader.Optional, dest);
-
-    console.log(peData);
   });
 
   // Start the read.
@@ -2323,7 +2319,12 @@ function fileProvided(file)
 // Register the call-back for when a file is provided to the input field.
 document.getElementById('file-field').addEventListener("change", function(event)
 {
-  if (event.target.files.length == 1)
+  if (event.target.files.length === 0)
+  {
+    var dest = document.getElementById('pe-results');
+    dest.innerHTML = '';
+  }
+  else if (event.target.files.length === 1)
   {
     fileProvided(event.target.files[0]);
   }
@@ -2336,11 +2337,11 @@ document.getElementById('file-field').addEventListener("change", function(event)
 // Make Buffer a global as the binary-parser module generates code which expects
 // Buffer to be in the global namespace.
 window.Buffer = Buffer;
-window.pe = pe;
 
 }).call(this,require("buffer").Buffer)
 },{"./pe.js":10,"buffer":2}],10:[function(require,module,exports){
 (function (process,Buffer){
+"use strict";
 //===----------------------------------------------------------------------===//
 //
 // NAME         : pe.js
