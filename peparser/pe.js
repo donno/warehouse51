@@ -296,14 +296,13 @@ function forEachBitmap(peData, callback, addHeader)
 // it will write out each bitmap to a separate file.
 //
 // This takes care of the addition of the bitmap header.
-function writeBitmapToFile()
+function writeBitmapToFile(fs)
 {
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00]);
 
   var bitmapIndex = 0;
-
   try
   {
     fs.mkdirSync('output');
@@ -322,7 +321,14 @@ function writeBitmapToFile()
   return writeFile;
 }
 
-var fs = require('fs');
-var data = fs.readFileSync(process.argv[2]);
-var peData = parsePeFile(data);
-forEachBitmap(peData, writeBitmapToFile());
+var main = function()
+{
+  var fs = require('fs');
+  var data = fs.readFileSync(process.argv[2]);
+  var peData = parsePeFile(data);
+  forEachBitmap(peData, writeBitmapToFile(fs));
+}
+
+if (require.main === module) {
+  main();
+}
