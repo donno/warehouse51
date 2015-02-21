@@ -239,7 +239,7 @@ function parsePeFile(data)
 
   return {
     'dosHeader': dosHeaderFromData,
-    'ntHeader': ntHeader,
+    'ntHeader': ntHeaderFromData,
     'peHeader': peHeaderFromData,
     'sectionHeaders': sectionHeadersFromData,
     'resourceSection': resourceSection,
