@@ -337,3 +337,10 @@ if (require.main === module) {
 //========================================================================================
 
 exports.parseFile = parsePeFile;
+exports.structures = {
+  'DosHeader': dosHeader,
+  'NtHeader': ntHeader,
+  'ResourceDirectoryTable': resourceDirectoryTable,
+  'ResourceDataEntry': resourceDataEntry,
+  'SectionHeader': sectionHeader
+  };
