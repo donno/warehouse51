@@ -69,7 +69,9 @@ var peHeader = new Parser()
 // It is a variable length array depending on the value of RvaAndSizesCount.
 var peHeaderOptional = new Parser()
   .endianess('little')
-  .uint16("Magic", {assert: 0x010B}) // 0x010B means PE32 and 0x020B means PE32+
+  .uint16("Magic", {assert: function(value) {
+    return value === 0x010B || value === 0x020B; // PE32 or PE32+.
+    }})
   .uint8("MajorLinkerVersion")
   .uint8("MinorLinkerVersion")
   .uint32("CodeSize")
