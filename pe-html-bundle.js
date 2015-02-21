@@ -2299,6 +2299,20 @@ function formatWithNames(structure, fields, dest)
   }
 };
 
+function writeBitmapToImageToScreen()
+{
+  var bitmapIndex = 0;
+  var bitmapsDiv = document.getElementById('pe-bitmaps');
+  bitmapsDiv.innerHTML = '';
+  function writeFile(bitmapData)
+  {
+    var base64EncodedAsciiString = bitmapData.toString('base64')
+    bitmapsDiv.innerHTML += '<img src="data:image/bmp;base64,' +
+      base64EncodedAsciiString + '">';
+  }
+  return writeFile;
+}
+
 function fileProvided(file)
 {
   var reader = new FileReader();
@@ -2315,6 +2329,13 @@ function fileProvided(file)
 
     var optionalHeaderStructure = pe.structures.NtHeader.next.next.options.type;
     formatWithNames(optionalHeaderStructure, peData.ntHeader.Optional, dest);
+
+    pe.forEachBitmap(peData, writeBitmapToImageToScreen(), true);
+    var bitmapsDiv = document.getElementById('pe-bitmaps');
+    if (bitmapsDiv.innerHTML.length === 0)
+    {
+      bitmapsDiv.innerHTML = 'No bitmaps could be found in the executable';
+    }
   });
 
   // Start the read.
@@ -2328,6 +2349,9 @@ document.getElementById('file-field').addEventListener("change", function(event)
   {
     var dest = document.getElementById('pe-results');
     dest.innerHTML = '';
+    var bitmapsDiv = document.getElementById('pe-bitmaps');
+    bitmapsDiv.innerHTML = 'No executable has been loaded so there is no ' +
+                           'bitmaps to show.';
   }
   else if (event.target.files.length === 1)
   {
@@ -2685,6 +2709,7 @@ if (require.main === module) {
 //========================================================================================
 
 exports.parseFile = parsePeFile;
+exports.forEachBitmap = forEachBitmap ;
 exports.structures = {
   'DosHeader': dosHeader,
   'NtHeader': ntHeader,
