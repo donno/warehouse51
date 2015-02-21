@@ -211,9 +211,6 @@ function parsePeFile(data)
   var ntHeaderFromData = ntHeader.parse(
     data.slice(dosHeaderFromData.NewExeHeaderAddress));
 
-  console.log(dosHeaderFromData);
-  console.log(ntHeaderFromData);
-
   // Ideally there would be a way to say sizeof(peHeader);
   var sizeOfPeHeader = 24;
 
@@ -227,18 +224,13 @@ function parsePeFile(data)
     function(item) { return item.Name == '.rsrc'; });
 
   var resourceDirectoryTableAddress = resourceSection.RawDataPointer;
-  console.log(resourceSection);
   var resourceDirectoryTableFromData = resourceDirectoryTable.parse(
     data.slice(resourceDirectoryTableAddress));
-
-  console.log(resourceDirectoryTableFromData);
 
   // FInd the bitmap one.
   var bitmapEntry = utilFindIf(resourceDirectoryTableFromData.Entries,
     function(item) {
       return item.ID == resourceIdType.Bitmap; });
-
-  console.log(bitmapEntry);
 
   // Read items in the bitmap entry.
   var entryA = resourceSection.RawDataPointer + (bitmapEntry.Offset & ~(1 << 31));
@@ -247,6 +239,7 @@ function parsePeFile(data)
 
   return {
     'dosHeader': dosHeaderFromData,
+    'ntHeader': ntHeader,
     'peHeader': peHeaderFromData,
     'sectionHeaders': sectionHeadersFromData,
     'resourceSection': resourceSection,
@@ -326,6 +319,10 @@ var main = function()
   var fs = require('fs');
   var data = fs.readFileSync(process.argv[2]);
   var peData = parsePeFile(data);
+  console.log(peData.dosHeader);
+  console.log(peData.ntHeader);
+  console.log(peData.resourceDirectoryTable);
+
   forEachBitmap(peData, writeBitmapToFile(fs));
 }
 
