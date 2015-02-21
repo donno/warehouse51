@@ -24,6 +24,14 @@ For JavaScript/Node (Install binary-parser):
 `$ npm install binary-parser`
 `$ node pe.js`
 
+For JavaScript/Browser (pe.html)
+
+`$ npm install browserify`
+`$ browserify pe-html -o pe-html-bundle.js`
+
+Open pe.html in a web browser, select an executable file and it will output some
+data.
+
 Working
 ---------------------
 It it possible to parse the first few parts of the file and parts of the .rsrc
@@ -35,9 +43,9 @@ The things I would like to see done first are:
 
 * Create a HTML page that uses the JavaScript implementation which allows the
   user to provide a executable file and it lists the information (values) in
-  a browser.
-  I already have a working prototype for being able to this it just lacking the
-  ability to display the results on the page.
+  a browser. This is what pe.html does but I would like to theme it better and
+  provide support for handling enumerations, flags and also the ability to
+  switch between decimal and hexadecimal display. It also needs some styling.
 
 Authors
 ---------
