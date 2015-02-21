@@ -51,7 +51,12 @@ function fileProvided(file)
 // Register the call-back for when a file is provided to the input field.
 document.getElementById('file-field').addEventListener("change", function(event)
 {
-  if (event.target.files.length == 1)
+  if (event.target.files.length === 0)
+  {
+    var dest = document.getElementById('pe-results');
+    dest.innerHTML = '';
+  }
+  else if (event.target.files.length === 1)
   {
     fileProvided(event.target.files[0]);
   }
