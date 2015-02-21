@@ -293,6 +293,9 @@ function forEachBitmap(peData, callback, addHeader)
 // This takes care of the addition of the bitmap header.
 function writeBitmapToFile(fs)
 {
+  // TODO: The following BMP header is now universal, it won't work for all
+  // bitmaps. It will work with the bitmaps in Ski32 (SkiFree) but not the
+  // one in notepad.exe on WIndows 7.
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00]);
