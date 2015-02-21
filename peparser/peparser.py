@@ -280,12 +280,20 @@ def parse(filename):
   bitmapTableEntries = ResourceDirectoryTable.parse(
     data[bitmapTableEntryAddress:])
 
-  offsets = [resourceSection.RawDataPointer + (entry.Offset ^ (1 << 31))
-             for entry in bitmapTableEntries.ResourceIDEntry]
+  return {
+    'dosHeader': dosData,
+    'peHeader': peData,
+    'sectionHeaders': sectionHeaders,
+    'resourceSection': resourceSection,
+    'resourceDirectoryTable': entries,
+    'bitmapDirectoryTable': bitmapTableEntries,
+    'rawData': data,
+  }
 
-  bmpHeader = [0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76,
-               0x00, 0x00, 0x00]
-  bmpHeader = ''.join(chr(o) for o in bmpHeader)
+
+def outputBitmaps(data, bitmapTableEntries, resourceSectionDataPointer):
+  offsets = [resourceSectionDataPointer + (entry.Offset ^ (1 << 31))
+             for entry in bitmapTableEntries.ResourceIDEntry]
 
   import os
   try:
@@ -293,16 +301,18 @@ def parse(filename):
   except OSError:
     pass
 
+  bmpHeader = [0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76,
+               0x00, 0x00, 0x00]
+  bmpHeader = ''.join(chr(o) for o in bmpHeader)
+
   i = 0
   for offset in offsets:
     subEntries = ResourceDirectoryTable.parse(data[offset:])
-    offsets = [resourceSection.RawDataPointer + (entry.Offset)
+    offsets = [resourceSectionDataPointer + (entry.Offset)
                for entry in subEntries.ResourceIDEntry]
 
     for entryOffset in offsets:
       resource = ResourceDataEntry.parse(data[entryOffset:])
-      print '%08X' % resource.Offset
-
       entryData = data[resource.Offset : resource.Offset + resource.Size]
 
       # Write out the bitmap data to files.
@@ -314,8 +324,6 @@ def parse(filename):
 
       i = i + 1
 
-  return
-
 if __name__  == '__main__':
   import argparse
   parser = argparse.ArgumentParser(description='Process some integers.')
@@ -324,4 +332,9 @@ if __name__  == '__main__':
   args = parser.parse_args()
 
   for exe in args.executables:
-    parse(exe)
+    parseResults = parse(exe)
+
+    outputBitmaps(parseResults['rawData'],
+                  parseResults['bitmapDirectoryTable'],
+                  parseResults['resourceSection'].RawDataPointer,
+                  )
