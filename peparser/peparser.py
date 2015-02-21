@@ -287,6 +287,12 @@ def parse(filename):
                0x00, 0x00, 0x00]
   bmpHeader = ''.join(chr(o) for o in bmpHeader)
 
+  import os
+  try:
+    os.mkdir('output')
+  except OSError:
+    pass
+
   i = 0
   for offset in offsets:
     subEntries = ResourceDirectoryTable.parse(data[offset:])
@@ -302,7 +308,7 @@ def parse(filename):
       # Write out the bitmap data to files.
       # i could instead be the ID of the bitmap (i.e resource.ID) which in this
       # case is just an integer not an enumeration (ResourceID).
-      with open('file_%04d.bmp' % i, 'wb') as fw:
+      with open('output/file_%04d.bmp' % i, 'wb') as fw:
         fw.write(bmpHeader)
         fw.write(entryData)
 
