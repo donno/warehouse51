@@ -21,8 +21,13 @@ function formatWithNames(structure, fields, dest)
   for (var item = structure.next; item; item = item.next)
   {
     dest.innerHTML +=
-      '<tr><td>' + item.varName + '</td><td>' + fields[item.varName] +
-      '</td></tr>';
+      '<li class="item">' +
+        '<strong class="name">' + item.varName + ':</strong>' +
+        '<span class="value">'  +
+           fields[item.varName].toLocaleString() +
+            ' (0x' + fields[item.varName].toString(16) + ')' +
+        '</span>' +
+      '</li>';
   }
 };
 

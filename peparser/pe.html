@@ -3,10 +3,34 @@
   <head>
       <meta charset="utf-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge">
-      <title></title>
+      <title>PE/COFF Parser</title>
       <meta name="description"
             content="PE/COFF Parser and Information Viewer">
       <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body {
+          font-size: 14px;
+          font-family: Arial,sans-serif;
+        }
+        .property-list {
+          display: block;
+          margin: 0;
+          list-style: none;
+        }
+        .item .name {
+          color: #707070;
+          font-weight: normal;
+          width: 200px;
+          display: inline-block;
+        }
+        .item .value {
+          display: inline-block;
+          padding-bottom: 2px;
+          padding-left: 10px;
+          padding-top: 2px;
+          margin-left: 10px;
+        }
+      </style>
   </head>
   <body>
     <!--[if lt IE 8]>
@@ -25,9 +49,7 @@
        analyse.</p>
 
     <div>
-      <table>
-        <tbody id="pe-results"></tbody>
-      </table>
+      <ul id="pe-results" class="property-list"></ul>
     </div>
     <script src="pe-html-bundle.js"></script>
   </body>
