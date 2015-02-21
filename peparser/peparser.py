@@ -8,6 +8,12 @@ The specification for the format can be found here:
   https://msdn.microsoft.com/en-us/windows/hardware/gg463119.aspx
 This will be referred to as the specification document here.
 
+For a more complete implementation see the 'formats/executable/pe32.py' file
+in the Construct library (https://github.com/construct/construct/), most of the
+following was written without refering to this file as I only found it a week
+after. At the time of writing it does not provide the
+Resource[Data|Directory]Entry struct.
+
 LICENSE      : The MIT License (see LICENSE.txt for details)
 
 TODO         :
