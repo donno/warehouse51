@@ -61,6 +61,54 @@ var peHeader = new Parser()
   .uint16("OptionalHeaderSize")
   .uint16("Characteristics");
 
+// https://msdn.microsoft.com/en-us/library/windows/desktop/ms680339.aspx
+// This is section 2.4.1 Optional Header Standard Fields in the MPECOFF
+// specification document.
+//
+// TODO: The DataDirectory member is missing from the end of this structure.
+// It is a variable length array depending on the value of RvaAndSizesCount.
+var peHeaderOptional = new Parser()
+  .endianess('little')
+  .uint16("Magic", {assert: 0x010B}) // 0x010B means PE32 and 0x020B means PE32+
+  .uint8("MajorLinkerVersion")
+  .uint8("MinorLinkerVersion")
+  .uint32("CodeSize")
+  .uint32("InitializedDataSize")
+  .uint32("UnitializedDataSize")
+  .uint32("EntryPointAddress")
+  .uint32("CodeBaseAddress")
+  .uint32("DataBaseAddress")
+  .uint32("ImageBaseAddres")
+  .uint32("SectionAlignment")
+  .uint32("FileAlignment")
+  .uint16("MajorOperatingSystemVersion")
+  .uint16("MinorOperatingSystemVersion")
+  .uint16("MajorImageVersion")
+  .uint16("MinorImageVersion")
+  .uint16("MajorSubSystemVersion")
+  .uint16("MinorSubSystemVersion")
+  .uint32("Win32VersionValue", {assert: 0}) // This is reserved.
+  .uint32("ImageSize")
+  .uint32("HeadersSize")
+  .uint32("CheckSum")
+  .uint16("Subsystem")
+  .uint16("DllCharacteristics")
+  .uint32("StackReserveSize")
+  .uint32("StackCommitSize")
+  .uint32("HeapReserveSize")
+  .uint32("HeapCommitSize")
+  .uint32("LoadingFlag")
+  .uint32("RvaAndSizesCount");
+
+// https://msdn.microsoft.com/en-us/library/windows/desktop/ms680336.aspx
+var ntHeader = new Parser()
+  .endianess('little')
+  // Disclaimer: The MSDN version has hte magic part here where as instead,
+  // I have put it into the peHeader which allows the peHeader to be easily
+  // parsed without the optional header.
+  .nest('Main', {type: peHeader})
+  .nest('Optional', {type: peHeaderOptional});
+
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680341.aspx
 var sectionHeader = new Parser()
   .endianess('little')
@@ -159,8 +207,12 @@ function parsePeFile(data)
   var peHeaderFromData = peHeader.parse(
     data.slice(dosHeaderFromData.NewExeHeaderAddress));
 
+  // This includes 'peHeaderFromData' and the optional header.
+  var ntHeaderFromData = ntHeader.parse(
+    data.slice(dosHeaderFromData.NewExeHeaderAddress));
+
   console.log(dosHeaderFromData);
-  console.log(peHeaderFromData);
+  console.log(ntHeaderFromData);
 
   // Ideally there would be a way to say sizeof(peHeader);
   var sizeOfPeHeader = 24;
