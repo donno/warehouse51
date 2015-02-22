@@ -257,6 +257,16 @@ StringTable = Struct(
   ULInt16("Padding"),
   )
 
+# Begin structures for parsing the .idata Section (also known as the import
+# tables).
+ImportDirectoryEntry = Struct(
+  "ImportDirectoryEntry",
+  ULInt32("ImportNameTableAddress"),
+  ULInt32("TimeDateStamp"),
+  ULInt32("ForwarderChain"),
+  ULInt32("NameAddress"),
+  ULInt32("ImportAddressTableAddress"),
+  )
 
 def parse(filename):
   """This function is very specialised at the moment as it was aimed at only
@@ -307,6 +317,30 @@ def parse(filename):
   bitmapTableEntries = ResourceDirectoryTable.parse(
     data[bitmapTableEntryAddress:])
 
+  directories = peData.DataDirectories
+
+  nameToDirectory = dict(
+    (name, directory)
+    for name, directory in zip(dataDirectoryIndexToName, directories)
+    if directory.Address != 0 and directory.Size != 0
+    )
+
+  # Parse the import directory table if it exists.
+  importDirectoryEntries = []
+  if 'ImportTable' in nameToDirectory:
+    importTableAddress = nameToDirectory['ImportTable'].Address
+    while True:
+      entry = ImportDirectoryEntry.parse(data[importTableAddress:])
+
+      # Keep going until there is a 'null' entry.
+      if (entry.ImportNameTableAddress == 0 and entry.TimeDateStamp == 0 and
+          entry.ForwarderChain == 0 and entry.NameAddress == 0 and
+          entry.ImportAddressTableAddress == 0):
+        break
+
+      importDirectoryEntries.append(entry)
+      importTableAddress += ImportDirectoryEntry.sizeof()
+
   return {
     'dosHeader': dosData,
     'peHeader': peData,
@@ -314,6 +348,8 @@ def parse(filename):
     'resourceSection': resourceSection,
     'resourceDirectoryTable': entries,
     'bitmapDirectoryTable': bitmapTableEntries,
+    'dataDirectoryNameToDirectory': nameToDirectory,
+    'importDirectoryEntries': importDirectoryEntries,
     'rawData': data,
   }
 
