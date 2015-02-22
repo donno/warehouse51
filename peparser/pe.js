@@ -199,6 +199,17 @@ var resourceIdType = {
   AssemblyManifest: 24,
   };
 
+// Begin structures for parsing the .idata Section (also known as the import
+// tables).
+var importDirectoryEntry = new Parser()
+  .endianess('little')
+  .uint32("ImportNameTableAddress")
+  .uint32("TimeDateStamp")
+  .uint32("ForwarderChain")
+  .uint32("NameAddress")
+  .uint32("ImportAddressTableAddress");
+// End of structures for parsing the .idata section.
+
 function parseSectionHeaders(data, address, count)
 {
   var sectionHeaders = new Parser()
@@ -263,6 +274,27 @@ function parsePeFile(data)
   var bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
     data.slice(entryA));
 
+  // Extract the indvidual items out of the data directories.
+  function keyValues(keys, values, skip) {
+    var length = Math.min(keys.length, values.length);
+    var results = {};
+    for (var i = 0; i < length; ++i)
+    {
+      if (skip && skip(values[i])) continue;
+      results[keys[i]] = values[i];
+    }
+    return results;
+  }
+
+  function ignoreEmpty(value)
+  {
+    return value.Address === 0 && value.Size === 0;
+  }
+
+  var dataDirectories = ntHeaderFromData.Optional.DataDirectories;
+  dataDirectories = keyValues(dataDirectoryIndexToName, dataDirectories,
+                              ignoreEmpty);
+
   return {
     'dosHeader': dosHeaderFromData,
     'ntHeader': ntHeaderFromData,
@@ -271,6 +303,7 @@ function parsePeFile(data)
     'resourceSection': resourceSection,
     'resourceDirectoryTable': resourceDirectoryTableFromData,
     'bitmapDirectoryTable': bitmapDirectoryTableFromData,
+    'dataDirectories': dataDirectories,
     'rawData': data,
   }
 }
