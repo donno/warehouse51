@@ -223,6 +223,18 @@ var importDirectoryEntry = new Parser()
   .uint32("ForwarderChain")
   .uint32("NameAddress")
   .uint32("ImportAddressTableAddress");
+
+var importDirectoryEntries = new Parser()
+  .array('Entries', {
+      type: importDirectoryEntry,
+      readUntil: function (item, buf) {
+        return item.ImportNameTableAddress === 0 &&
+          item.TimeDateStamp === 0 &&
+          item.ForwarderChain === 0 &&
+          item.NameAddress === 0 &&
+          item.ImportAddressTableAddress === 0;
+        },
+  });
 // End of structures for parsing the .idata section.
 
 function parseSectionHeaders(data, address, count)
@@ -289,6 +301,16 @@ function parsePeFile(data)
   var bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
     data.slice(entryA));
 
+  var directories = ntHeaderFromData.Optional.DataDirectories;
+  // Read the import table if there is one.
+  var importTable;
+  if (directories.ImportTable)
+  {
+    importTable =
+      importDirectoryEntries.parse(data.slice(directories.ImportTable.Address));
+    importTable = importTable.Entries;
+  }
+
   return {
     'dosHeader': dosHeaderFromData,
     'ntHeader': ntHeaderFromData,
@@ -297,6 +319,7 @@ function parsePeFile(data)
     'resourceSection': resourceSection,
     'resourceDirectoryTable': resourceDirectoryTableFromData,
     'bitmapDirectoryTable': bitmapDirectoryTableFromData,
+    'importTable': importTable,
     'rawData': data,
   }
 }
