@@ -153,7 +153,7 @@ peHeaderOptional = Struct("PEHeaderOptional",
   )
 
 # The following list is from 2.4.3. Optional Header Data Directories and
-# it correpsonds to the elements in peHeaderOptional.DataDirectories.
+# it corresponds to the elements in peHeaderOptional.DataDirectories.
 #
 # The intended use is:
 #   for name, directory in zip(dataDirectoryIndexToName,
@@ -257,7 +257,7 @@ StringTable = Struct(
   ULInt16("Padding"),
   )
 
-# Begin structures for parsing the .idata Section (also known as the import
+# Begin structures for parsing the .idata section (also known as the import
 # tables).
 ImportDirectoryEntry = Struct(
   "ImportDirectoryEntry",
@@ -267,6 +267,8 @@ ImportDirectoryEntry = Struct(
   ULInt32("NameAddress"),
   ULInt32("ImportAddressTableAddress"),
   )
+
+# End of structures for parsing the .idata section.
 
 def parse(filename):
   """This function is very specialised at the moment as it was aimed at only
