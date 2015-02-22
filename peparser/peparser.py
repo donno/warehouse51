@@ -144,10 +144,37 @@ peHeaderOptional = Struct("PEHeaderOptional",
   SLInt32("LoadingFlag"), # No longer used.
   SLInt32("RvaAndSizesCount"),
 
-  # TODO: The DataDirectory member missing from here.
-  # This is a variable length array depending on the value of
-  # NumberOfRvaAndSizes.
+  Array(lambda ctx: ctx.RvaAndSizesCount,
+        Struct("DataDirectories",
+               ULInt32("Address"),
+               ULInt32("Size"),
+              )
+        ),
   )
+
+# The following list is from 2.4.3. Optional Header Data Directories and
+# it correpsonds to the elements in peHeaderOptional.DataDirectories.
+#
+# The intended use is:
+#   for name, directory in zip(dataDirectoryIndexToName,
+#                              peData.Optional.DataDirectories):
+dataDirectoryIndexToName = [
+  'ExportTable',
+  'ImportTable',
+  'ResourceTable',
+  'ExceptionTable',
+  'CertificateTable',
+  'BaseRelocationTable',
+  'Debug',
+  'Architecture', # Reserved and unused.
+  'GlobalPointer',
+  'TLSTable', # Thread local storage table address.
+  'LoadConfigurationTable',
+  'BoundImportTable',
+  'ImportAddressTable',
+  'DelayImportDescriptor',
+  'CLRRuntimeHeader',
+  ]
 
 peHeader = Struct("NTImageHeader",
                   Embed(peHeaderBase),
