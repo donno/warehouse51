@@ -113,8 +113,22 @@ var peHeaderOptional = new Parser()
   .uint32("UnitializedDataSize")
   .uint32("EntryPointAddress")
   .uint32("CodeBaseAddress")
-  .uint32("DataBaseAddress")
-  .uint32("ImageBaseAddres")
+  .choice('DataBaseAddress', {
+    tag: 'Magic',
+    choices: {
+      0x010B: new Parser().uint32("DataBaseAddress"),
+      0x020B: new Parser().skip(0)
+    }})
+  .choice('ImageBaseAddress', {
+    tag: 'Magic',
+    choices: {
+      0x010B: new Parser().uint32("ImageBaseAddress"),
+      0x020B: new Parser()
+        // There is no 64-bit integer version. Buffer.readIntBE only supports
+        // up to 48-bit integers.
+        .uint32("ImageBaseAddressHigh")
+        .uint32("ImageBaseAddressLow")
+    }})
   .uint32("SectionAlignment")
   .uint32("FileAlignment")
   .uint16("MajorOperatingSystemVersion")
