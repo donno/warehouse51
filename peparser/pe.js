@@ -315,7 +315,7 @@ function parsePeFile(data)
   var directories = ntHeaderFromData.Optional.DataDirectories;
   // Read the import table if there is one.
   var importTable;
-  if (directories.ImportTable)
+  if (directories && directories.ImportTable)
   {
     importTable =
       importDirectoryEntries.parse(data.slice(directories.ImportTable.Address));
