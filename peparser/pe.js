@@ -326,6 +326,12 @@ function parsePeFile(data)
 
 function forEachBitmap(peData, callback, addHeader)
 {
+  // The bitmap header is 14 bytes:
+  // 2-bytes for BM (0x42, 0x4D)
+  // 4-bytes for file size.
+  // 4-bytes padding.
+  // 4-bytes for data offset
+
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00]);
