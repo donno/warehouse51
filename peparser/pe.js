@@ -309,6 +309,9 @@ function parsePeFile(data)
     importTable =
       importDirectoryEntries.parse(data.slice(directories.ImportTable.Address));
     importTable = importTable.Entries;
+
+    // Lets element the terminating element.
+    importTable.pop();
   }
 
   return {
