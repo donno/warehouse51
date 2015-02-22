@@ -275,11 +275,8 @@ function parsePeFile(data)
   var ntHeaderFromData = ntHeader.parse(
     data.slice(dosHeaderFromData.NewExeHeaderAddress));
 
-  // Ideally there would be a way to say sizeof(peHeader);
-  var sizeOfPeHeader = 24;
-
   var sectionHeaderAddress = dosHeaderFromData.NewExeHeaderAddress +
-    peHeaderFromData.OptionalHeaderSize + sizeOfPeHeader;
+    peHeaderFromData.OptionalHeaderSize + peHeader.sizeOf();
 
   var sectionHeadersFromData =
     parseSectionHeaders(data, sectionHeaderAddress, peHeaderFromData.SectionCount);
