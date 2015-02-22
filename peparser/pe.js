@@ -61,12 +61,46 @@ var peHeader = new Parser()
   .uint16("OptionalHeaderSize")
   .uint16("Characteristics");
 
+function formatDataDirectories(directories)
+{
+  // Assigns a name to the directory such that it can be looked up by-name.
+  //
+  // Empty directories will be ignored where an empty directory is one with an
+  // Address of zero and Size of zero.
+
+  // The following list is from 2.4.3. Optional Header Data Directories and
+  // it corresponds to the elements in peHeaderOptional.DataDirectories.
+  var dataDirectoryIndexToName = [
+    'ExportTable',
+    'ImportTable',
+    'ResourceTable',
+    'ExceptionTable',
+    'CertificateTable',
+    'BaseRelocationTable',
+    'Debug',
+    'Architecture', // Reserved and unused.
+    'GlobalPointer',
+    'TLSTable', // Thread local storage table address.
+    'LoadConfigurationTable',
+    'BoundImportTable',
+    'ImportAddressTable',
+    'DelayImportDescriptor',
+    'CLRRuntimeHeader'
+    ];
+
+  var byName = {};
+  for (var i = 0; i < directories.length; ++i)
+  {
+    if (directories[i].Address === 0 && directories[i].Size === 0) continue;
+    var index = dataDirectoryIndexToName[i] || i;
+    byName[index] = directories[i];
+  }
+  return byName;
+}
+
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680339.aspx
 // This is section 2.4.1 Optional Header Standard Fields in the MPECOFF
 // specification document.
-//
-// TODO: The DataDirectory member is missing from the end of this structure.
-// It is a variable length array depending on the value of RvaAndSizesCount.
 var peHeaderOptional = new Parser()
   .endianess('little')
   .uint16("Magic", {assert: function(value) {
@@ -104,27 +138,8 @@ var peHeaderOptional = new Parser()
   .array('DataDirectories', {
     type: new Parser().endianess('little').uint32("Address").uint32("Size"),
     length: 'RvaAndSizesCount',
+    formatter: formatDataDirectories
     });
-
-// The following list is from 2.4.3. Optional Header Data Directories and
-// it corresponds to the elements in peHeaderOptional.DataDirectories.
-var dataDirectoryIndexToName = [
-  'ExportTable',
-  'ImportTable',
-  'ResourceTable',
-  'ExceptionTable',
-  'CertificateTable',
-  'BaseRelocationTable',
-  'Debug',
-  'Architecture', // Reserved and unused.
-  'GlobalPointer',
-  'TLSTable', // Thread local storage table address.
-  'LoadConfigurationTable',
-  'BoundImportTable',
-  'ImportAddressTable',
-  'DelayImportDescriptor',
-  'CLRRuntimeHeader'
-  ];
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680336.aspx
 var ntHeader = new Parser()
@@ -274,27 +289,6 @@ function parsePeFile(data)
   var bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
     data.slice(entryA));
 
-  // Extract the indvidual items out of the data directories.
-  function keyValues(keys, values, skip) {
-    var length = Math.min(keys.length, values.length);
-    var results = {};
-    for (var i = 0; i < length; ++i)
-    {
-      if (skip && skip(values[i])) continue;
-      results[keys[i]] = values[i];
-    }
-    return results;
-  }
-
-  function ignoreEmpty(value)
-  {
-    return value.Address === 0 && value.Size === 0;
-  }
-
-  var dataDirectories = ntHeaderFromData.Optional.DataDirectories;
-  dataDirectories = keyValues(dataDirectoryIndexToName, dataDirectories,
-                              ignoreEmpty);
-
   return {
     'dosHeader': dosHeaderFromData,
     'ntHeader': ntHeaderFromData,
@@ -303,7 +297,6 @@ function parsePeFile(data)
     'resourceSection': resourceSection,
     'resourceDirectoryTable': resourceDirectoryTableFromData,
     'bitmapDirectoryTable': bitmapDirectoryTableFromData,
-    'dataDirectories': dataDirectories,
     'rawData': data,
   }
 }
@@ -418,5 +411,6 @@ exports.structures = {
   'NtHeader': ntHeader,
   'ResourceDirectoryTable': resourceDirectoryTable,
   'ResourceDataEntry': resourceDataEntry,
-  'SectionHeader': sectionHeader
+  'SectionHeader': sectionHeader,
+  'ImportDirectoryEntry': importDirectoryEntry
   };
