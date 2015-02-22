@@ -312,6 +312,21 @@ function parsePeFile(data)
 
     // Lets element the terminating element.
     importTable.pop();
+
+    // TODO: Look into expanding the binary-parser library to make it possible
+    // to say these bytes is an offset/address to type (primative or parser),
+    // such that instead of 'NameAddress' it could simply be 'Name'.
+
+    // Work around the above TODO by adding the Name to the table entries.
+    var names = new Parser()
+      .string('Name', {
+        zeroTerminated : true
+        });
+    for (var i = 0; i < importTable.length; ++i)
+    {
+      var nameAddress = importTable[i].NameAddress;
+      importTable[i].Name = names.parse(data.slice(nameAddress)).Name;
+    }
   }
 
   return {
