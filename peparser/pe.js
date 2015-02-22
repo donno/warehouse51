@@ -100,7 +100,31 @@ var peHeaderOptional = new Parser()
   .uint32("HeapReserveSize")
   .uint32("HeapCommitSize")
   .uint32("LoadingFlag")
-  .uint32("RvaAndSizesCount");
+  .uint32("RvaAndSizesCount")
+  .array('DataDirectories', {
+    type: new Parser().endianess('little').uint32("Address").uint32("Size"),
+    length: 'RvaAndSizesCount',
+    });
+
+// The following list is from 2.4.3. Optional Header Data Directories and
+// it corresponds to the elements in peHeaderOptional.DataDirectories.
+var dataDirectoryIndexToName = [
+  'ExportTable',
+  'ImportTable',
+  'ResourceTable',
+  'ExceptionTable',
+  'CertificateTable',
+  'BaseRelocationTable',
+  'Debug',
+  'Architecture', // Reserved and unused.
+  'GlobalPointer',
+  'TLSTable', // Thread local storage table address.
+  'LoadConfigurationTable',
+  'BoundImportTable',
+  'ImportAddressTable',
+  'DelayImportDescriptor',
+  'CLRRuntimeHeader'
+  ];
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680336.aspx
 var ntHeader = new Parser()
@@ -339,6 +363,9 @@ var main = function()
   console.log(peData.dosHeader);
   console.log(peData.ntHeader);
   console.log(peData.resourceDirectoryTable);
+
+  console.log('Data directories: ');
+  console.log(peData.ntHeader.Optional.DataDirectories);
 
   forEachBitmap(peData, writeBitmapToFile(fs));
 }
