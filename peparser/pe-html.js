@@ -62,6 +62,27 @@ function fileProvided(file)
     var optionalHeaderStructure = pe.structures.NtHeader.next.next.options.type;
     formatWithNames(optionalHeaderStructure, peData.ntHeader.Optional, dest);
 
+    // Import table.
+    var importTableDiv = document.getElementById('pe-import-table');
+    if (!peData.importTable || peData.importTable.length === 0)
+    {
+      importTableDiv.innerHTML = 'No information available';
+    }
+    else
+    {
+      importTableDiv.innerHTML = '';
+      for (var i = 0; i < peData.importTable.length; ++i)
+      {
+        importTableDiv.innerHTML += '<h5>' + peData.importTable[i].Name +
+          '</h5>';
+        var newList = document.createElement("ul");
+        formatWithNames(pe.structures.ImportDirectoryEntry,
+                        peData.importTable[i],
+                        newList);
+        importTableDiv.appendChild(newList);
+      }
+    }
+
     pe.forEachBitmap(peData, writeBitmapToImageToScreen(), true);
     var bitmapsDiv = document.getElementById('pe-bitmaps');
     if (bitmapsDiv.innerHTML.length === 0)
@@ -81,6 +102,9 @@ document.getElementById('file-field').addEventListener("change", function(event)
   {
     var dest = document.getElementById('pe-results');
     dest.innerHTML = '';
+    var importTableDiv = document.getElementById('pe-import-table');
+    importTableDiv.innerHTML = 'No executable has been loaded so there is no ' +
+                               'import table to show.';
     var bitmapsDiv = document.getElementById('pe-bitmaps');
     bitmapsDiv.innerHTML = 'No executable has been loaded so there is no ' +
                            'bitmaps to show.';
