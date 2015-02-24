@@ -390,7 +390,7 @@ function forEachBitmap(peData, callback, addHeader)
       if (addHeader)
       {
         // Modify the bmpHeader to include the correct file size.
-        var bmpSize = bitmapData.length + bmpHeader.length;
+        var bmpSize = entryData.length + bmpHeader.length;
         bmpHeader[2] = (bmpSize & 0xFF);
         bmpHeader[3] = ((bmpSize >> 8) & 0xFF);
 
