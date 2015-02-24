@@ -2330,6 +2330,27 @@ function fileProvided(file)
     var optionalHeaderStructure = pe.structures.NtHeader.next.next.options.type;
     formatWithNames(optionalHeaderStructure, peData.ntHeader.Optional, dest);
 
+    // Import table.
+    var importTableDiv = document.getElementById('pe-import-table');
+    if (!peData.importTable || peData.importTable.length === 0)
+    {
+      importTableDiv.innerHTML = 'No information available';
+    }
+    else
+    {
+      importTableDiv.innerHTML = '';
+      for (var i = 0; i < peData.importTable.length; ++i)
+      {
+        importTableDiv.innerHTML += '<h5>' + peData.importTable[i].Name +
+          '</h5>';
+        var newList = document.createElement("ul");
+        formatWithNames(pe.structures.ImportDirectoryEntry,
+                        peData.importTable[i],
+                        newList);
+        importTableDiv.appendChild(newList);
+      }
+    }
+
     pe.forEachBitmap(peData, writeBitmapToImageToScreen(), true);
     var bitmapsDiv = document.getElementById('pe-bitmaps');
     if (bitmapsDiv.innerHTML.length === 0)
@@ -2349,6 +2370,9 @@ document.getElementById('file-field').addEventListener("change", function(event)
   {
     var dest = document.getElementById('pe-results');
     dest.innerHTML = '';
+    var importTableDiv = document.getElementById('pe-import-table');
+    importTableDiv.innerHTML = 'No executable has been loaded so there is no ' +
+                               'import table to show.';
     var bitmapsDiv = document.getElementById('pe-bitmaps');
     bitmapsDiv.innerHTML = 'No executable has been loaded so there is no ' +
                            'bitmaps to show.';
@@ -2433,12 +2457,46 @@ var peHeader = new Parser()
   .uint16("OptionalHeaderSize")
   .uint16("Characteristics");
 
+function formatDataDirectories(directories)
+{
+  // Assigns a name to the directory such that it can be looked up by-name.
+  //
+  // Empty directories will be ignored where an empty directory is one with an
+  // Address of zero and Size of zero.
+
+  // The following list is from 2.4.3. Optional Header Data Directories and
+  // it corresponds to the elements in peHeaderOptional.DataDirectories.
+  var dataDirectoryIndexToName = [
+    'ExportTable',
+    'ImportTable',
+    'ResourceTable',
+    'ExceptionTable',
+    'CertificateTable',
+    'BaseRelocationTable',
+    'Debug',
+    'Architecture', // Reserved and unused.
+    'GlobalPointer',
+    'TLSTable', // Thread local storage table address.
+    'LoadConfigurationTable',
+    'BoundImportTable',
+    'ImportAddressTable',
+    'DelayImportDescriptor',
+    'CLRRuntimeHeader'
+    ];
+
+  var byName = {};
+  for (var i = 0; i < directories.length; ++i)
+  {
+    if (directories[i].Address === 0 && directories[i].Size === 0) continue;
+    var index = dataDirectoryIndexToName[i] || i;
+    byName[index] = directories[i];
+  }
+  return byName;
+}
+
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680339.aspx
 // This is section 2.4.1 Optional Header Standard Fields in the MPECOFF
 // specification document.
-//
-// TODO: The DataDirectory member is missing from the end of this structure.
-// It is a variable length array depending on the value of RvaAndSizesCount.
 var peHeaderOptional = new Parser()
   .endianess('little')
   .uint16("Magic", {assert: function(value) {
@@ -2451,8 +2509,22 @@ var peHeaderOptional = new Parser()
   .uint32("UnitializedDataSize")
   .uint32("EntryPointAddress")
   .uint32("CodeBaseAddress")
-  .uint32("DataBaseAddress")
-  .uint32("ImageBaseAddres")
+  .choice('DataBaseAddress', {
+    tag: 'Magic',
+    choices: {
+      0x010B: new Parser().uint32("DataBaseAddress"),
+      0x020B: new Parser().skip(0)
+    }})
+  .choice('ImageBaseAddress', {
+    tag: 'Magic',
+    choices: {
+      0x010B: new Parser().uint32("ImageBaseAddress"),
+      0x020B: new Parser()
+        // There is no 64-bit integer version. Buffer.readIntBE only supports
+        // up to 48-bit integers.
+        .uint32("ImageBaseAddressHigh")
+        .uint32("ImageBaseAddressLow")
+    }})
   .uint32("SectionAlignment")
   .uint32("FileAlignment")
   .uint16("MajorOperatingSystemVersion")
@@ -2472,7 +2544,12 @@ var peHeaderOptional = new Parser()
   .uint32("HeapReserveSize")
   .uint32("HeapCommitSize")
   .uint32("LoadingFlag")
-  .uint32("RvaAndSizesCount");
+  .uint32("RvaAndSizesCount")
+  .array('DataDirectories', {
+    type: new Parser().endianess('little').uint32("Address").uint32("Size"),
+    length: 'RvaAndSizesCount',
+    formatter: formatDataDirectories
+    });
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms680336.aspx
 var ntHeader = new Parser()
@@ -2547,6 +2624,28 @@ var resourceIdType = {
   AssemblyManifest: 24,
   };
 
+// Begin structures for parsing the .idata Section (also known as the import
+// tables).
+var importDirectoryEntry = new Parser()
+  .endianess('little')
+  .uint32("ImportNameTableAddress")
+  .uint32("TimeDateStamp")
+  .uint32("ForwarderChain")
+  .uint32("NameAddress")
+  .uint32("ImportAddressTableAddress");
+
+var importDirectoryEntries = new Parser()
+  .array('Entries', {
+      type: importDirectoryEntry,
+      readUntil: function (item, buf) {
+        return item.ImportNameTableAddress === 0 &&
+          item.TimeDateStamp === 0 &&
+          item.ForwarderChain === 0 &&
+          item.NameAddress === 0 &&
+          item.ImportAddressTableAddress === 0;
+        },
+  });
+// End of structures for parsing the .idata section.
 function parseSectionHeaders(data, address, count)
 {
   var sectionHeaders = new Parser()
@@ -2585,11 +2684,8 @@ function parsePeFile(data)
   var ntHeaderFromData = ntHeader.parse(
     data.slice(dosHeaderFromData.NewExeHeaderAddress));
 
-  // Ideally there would be a way to say sizeof(peHeader);
-  var sizeOfPeHeader = 24;
-
   var sectionHeaderAddress = dosHeaderFromData.NewExeHeaderAddress +
-    peHeaderFromData.OptionalHeaderSize + sizeOfPeHeader;
+    peHeaderFromData.OptionalHeaderSize + peHeader.sizeOf();
 
   var sectionHeadersFromData =
     parseSectionHeaders(data, sectionHeaderAddress, peHeaderFromData.SectionCount);
@@ -2611,19 +2707,55 @@ function parsePeFile(data)
   var bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
     data.slice(entryA));
 
+  var directories = ntHeaderFromData.Optional.DataDirectories;
+  // Read the import table if there is one.
+  var importTable;
+  if (directories && directories.ImportTable)
+  {
+    importTable =
+      importDirectoryEntries.parse(data.slice(directories.ImportTable.Address));
+    importTable = importTable.Entries;
+
+    // Lets element the terminating element.
+    importTable.pop();
+
+    // TODO: Look into expanding the binary-parser library to make it possible
+    // to say these bytes is an offset/address to type (primative or parser),
+    // such that instead of 'NameAddress' it could simply be 'Name'.
+
+    // Work around the above TODO by adding the Name to the table entries.
+    var names = new Parser()
+      .string('Name', {
+        zeroTerminated : true
+        });
+    for (var i = 0; i < importTable.length; ++i)
+    {
+      var nameAddress = importTable[i].NameAddress;
+      importTable[i].Name = names.parse(data.slice(nameAddress)).Name;
+    }
+  }
+
   return {
     'dosHeader': dosHeaderFromData,
     'ntHeader': ntHeaderFromData,
     'peHeader': peHeaderFromData,
     'sectionHeaders': sectionHeadersFromData,
     'resourceSection': resourceSection,
+    'resourceDirectoryTable': resourceDirectoryTableFromData,
     'bitmapDirectoryTable': bitmapDirectoryTableFromData,
+    'importTable': importTable,
     'rawData': data,
   }
 }
 
 function forEachBitmap(peData, callback, addHeader)
 {
+  // The bitmap header is 14 bytes:
+  // 2-bytes for BM (0x42, 0x4D)
+  // 4-bytes for file size.
+  // 4-bytes padding.
+  // 4-bytes for data offset
+
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00]);
@@ -2652,6 +2784,11 @@ function forEachBitmap(peData, callback, addHeader)
       // Append the bitmap header.
       if (addHeader)
       {
+        // Modify the bmpHeader to include the correct file size.
+        var bmpSize = entryData.length + bmpHeader.length;
+        bmpHeader[2] = (bmpSize & 0xFF);
+        bmpHeader[3] = ((bmpSize >> 8) & 0xFF);
+
         entryData = Buffer.concat([bmpHeader, entryData]);
       }
       callback(entryData);
@@ -2665,6 +2802,9 @@ function forEachBitmap(peData, callback, addHeader)
 // This takes care of the addition of the bitmap header.
 function writeBitmapToFile(fs)
 {
+  // TODO: The following BMP header is now universal, it won't work for all
+  // bitmaps. It will work with the bitmaps in Ski32 (SkiFree) but not the
+  // one in notepad.exe on WIndows 7.
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00]);
@@ -2697,6 +2837,9 @@ var main = function()
   console.log(peData.ntHeader);
   console.log(peData.resourceDirectoryTable);
 
+  console.log('Data directories: ');
+  console.log(peData.ntHeader.Optional.DataDirectories);
+
   forEachBitmap(peData, writeBitmapToFile(fs));
 }
 
@@ -2715,7 +2858,8 @@ exports.structures = {
   'NtHeader': ntHeader,
   'ResourceDirectoryTable': resourceDirectoryTable,
   'ResourceDataEntry': resourceDataEntry,
-  'SectionHeader': sectionHeader
+  'SectionHeader': sectionHeader,
+  'ImportDirectoryEntry': importDirectoryEntry
   };
 
 }).call(this,require('_process'),require("buffer").Buffer)
