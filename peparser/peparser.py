@@ -268,6 +268,23 @@ ImportDirectoryEntry = Struct(
   ULInt32("ImportAddressTableAddress"),
   )
 
+# The 31st bit decides if it is import by ordinal (1) or by name (0).
+#
+# See for how to implement this properly,
+#  http://construct.readthedocs.org/en/latest/bitwise.html#bitfield
+# For now I have only been working with entries with are by name.
+NameTableEntries = RepeatUntil(lambda v, ctx: v == 0, ULInt32("Value"))
+
+HintNameTableEntry = Struct(
+  "HintNameTableEntry",
+  ULInt16("Hint"),
+  CString('Name'),
+  )
+
+# TODO: I am quite sure that the Construct library allows this to be chained
+# into one thing were the values in NameTableEntries are automatically resolved
+# to HintNameTableEntry.
+
 # End of structures for parsing the .idata section.
 
 def parse(filename):
@@ -342,6 +359,15 @@ def parse(filename):
 
       importDirectoryEntries.append(entry)
       importTableAddress += ImportDirectoryEntry.sizeof()
+
+    # Look-up the names of the exports.
+    # NOTE: This is assuming they are loaded by name and not ordinal.
+    for e in importDirectoryEntries:
+      entries = [
+        HintNameTableEntry.parse(data[entry:])
+        for entry in NameTableEntries.parse(data[e.ImportNameTableAddress:])
+        if entry != 0]
+      e.Names = entries
 
   return {
     'dosHeader': dosData,
