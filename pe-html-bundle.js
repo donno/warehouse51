@@ -2347,6 +2347,25 @@ function fileProvided(file)
         formatWithNames(pe.structures.ImportDirectoryEntry,
                         peData.importTable[i],
                         newList);
+
+        var nameList = document.createElement("ul");
+        for (var j = 0; j < peData.importTable[i].Names.length; ++j)
+        {
+          var name = peData.importTable[i].Names[j];
+          nameList.innerHTML += '<li class="item">' + name.Name + '</li>';
+        }
+
+        var title = document.createElement("strong");
+        title.className = 'name';
+        title.innerHTML = 'Names:';
+
+        var li = document.createElement("li");
+        li.className = 'item';
+        li.appendChild(title);
+        li.appendChild(nameList);
+
+        newList.appendChild(li);
+
         importTableDiv.appendChild(newList);
       }
     }
@@ -2645,6 +2664,18 @@ var importDirectoryEntries = new Parser()
           item.ImportAddressTableAddress === 0;
         },
   });
+
+var nameTableEntries = new Parser()
+  .array('Names', {
+    type: 'int32le',
+    readUntil: function(item, buffer) { return item === 0 }
+    })
+
+var hintAndNameTableEntry = new Parser()
+  .endianess('little')
+  .uint16("Hint")
+  .string("Name", {zeroTerminated: true});
+
 // End of structures for parsing the .idata section.
 function parseSectionHeaders(data, address, count)
 {
@@ -2732,6 +2763,21 @@ function parsePeFile(data)
     {
       var nameAddress = importTable[i].NameAddress;
       importTable[i].Name = names.parse(data.slice(nameAddress)).Name;
+
+      // Parse the names.
+      var address = importTable[i].ImportNameTableAddress;
+      var nameEntries = nameTableEntries.parse(data.slice(address)).Names;
+      var nameEntryValues = [];
+      for (var j = 0; j < nameEntries.length; ++j)
+      {
+        var nameAddress = nameEntries[j];
+        if (nameAddress === 0) continue;
+
+        var name = hintAndNameTableEntry.parse(data.slice(nameAddress));
+        nameEntryValues.push(name);
+      }
+
+      importTable[i].Names = nameEntryValues;
     }
   }
 
@@ -2839,6 +2885,11 @@ var main = function()
 
   console.log('Data directories: ');
   console.log(peData.ntHeader.Optional.DataDirectories);
+
+  for (var i = 0; i < peData.importTable.length; ++i)
+  {
+    console.log(peData.importTable[i]);
+  }
 
   forEachBitmap(peData, writeBitmapToFile(fs));
 }
