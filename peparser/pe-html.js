@@ -79,6 +79,25 @@ function fileProvided(file)
         formatWithNames(pe.structures.ImportDirectoryEntry,
                         peData.importTable[i],
                         newList);
+
+        var nameList = document.createElement("ul");
+        for (var j = 0; j < peData.importTable[i].Names.length; ++j)
+        {
+          var name = peData.importTable[i].Names[j];
+          nameList.innerHTML += '<li class="item">' + name.Name + '</li>';
+        }
+
+        var title = document.createElement("strong");
+        title.className = 'name';
+        title.innerHTML = 'Names:';
+
+        var li = document.createElement("li");
+        li.className = 'item';
+        li.appendChild(title);
+        li.appendChild(nameList);
+
+        newList.appendChild(li);
+
         importTableDiv.appendChild(newList);
       }
     }
