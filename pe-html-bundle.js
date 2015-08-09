@@ -2724,19 +2724,23 @@ function parsePeFile(data)
   var resourceSection = utilFindIf(sectionHeadersFromData,
     function(item) { return item.Name == '.rsrc'; });
 
-  var resourceDirectoryTableAddress = resourceSection.RawDataPointer;
-  var resourceDirectoryTableFromData = resourceDirectoryTable.parse(
-    data.slice(resourceDirectoryTableAddress));
+  var bitmapDirectoryTableFromData;
+  if (resourceSection)
+  {
+    var resourceDirectoryTableAddress = resourceSection.RawDataPointer;
+    var resourceDirectoryTableFromData = resourceDirectoryTable.parse(
+      data.slice(resourceDirectoryTableAddress));
 
-  // FInd the bitmap one.
-  var bitmapEntry = utilFindIf(resourceDirectoryTableFromData.Entries,
-    function(item) {
-      return item.ID == resourceIdType.Bitmap; });
+    // Find the bitmap one.
+    var bitmapEntry = utilFindIf(resourceDirectoryTableFromData.Entries,
+      function(item) {
+        return item.ID == resourceIdType.Bitmap; });
 
-  // Read items in the bitmap entry.
-  var entryA = resourceSection.RawDataPointer + (bitmapEntry.Offset & ~(1 << 31));
-  var bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
-    data.slice(entryA));
+    // Read items in the bitmap entry.
+    var entryA = resourceSection.RawDataPointer + (bitmapEntry.Offset & ~(1 << 31));
+    bitmapDirectoryTableFromData = resourceDirectoryTable.parse(
+      data.slice(entryA));
+  }
 
   var directories = ntHeaderFromData.Optional.DataDirectories;
   // Read the import table if there is one.
@@ -2801,6 +2805,12 @@ function forEachBitmap(peData, callback, addHeader)
   // 4-bytes for file size.
   // 4-bytes padding.
   // 4-bytes for data offset
+
+  if (!peData.bitmapDirectoryTable)
+  {
+    // There must not be any bitmaps in this image.
+    return;
+  }
 
   var bmpHeader = new Buffer([
     0x42, 0x4D, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
