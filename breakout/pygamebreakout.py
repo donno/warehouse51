@@ -20,8 +20,8 @@ class PyGameEngine(engine.Engine):
         vader_x, vader_y = self.Bounds[:2]
 
         # Draw the living invaders.
-        for row in xrange(0, len(self.RowColours)):
-            for column in xrange(0, self.BlocksAcrossCount):
+        for row, row_colour in enumerate(self.RowColours):
+            for column in range(0, self.BlocksAcrossCount):
                 index = row * self.BlocksAcrossCount + column
                 if not self.blocks[index]:
                     continue
@@ -31,7 +31,7 @@ class PyGameEngine(engine.Engine):
                 draw_at_y = vader_y + self.BlockHeight * row + padding
                 pygame.draw.rect(
                     self.display,
-                    self.RowColours[row],
+                    row_colour,
                     (draw_at_x,
                      draw_at_y,
                      self.BlockWidth - padding * 2,
@@ -39,7 +39,7 @@ class PyGameEngine(engine.Engine):
 
         # Draw the player.
         player_x, player_y = self.player_position
-        player_x = player_x - self.PlayerWidth / 2
+        player_x = player_x - self.PlayerWidth // 2
         pygame.draw.rect(self.display,
                          (255, 255, 255),
                          (player_x, player_y, self.PlayerWidth, self.PlayerHeight))

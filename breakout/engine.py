@@ -57,7 +57,7 @@ class Engine(object):
         self.player_velocity = 0
         self.is_game_over = False
 
-        ball_x = self.Bounds[0] + (self.Bounds[2] - self.Bounds[0]) / 2
+        ball_x = self.Bounds[0] + (self.Bounds[2] - self.Bounds[0]) // 2
 
         self.ball = Ball(ball_x, self.Bounds[3] - 50)
         self.restart()
@@ -65,11 +65,11 @@ class Engine(object):
     def restart(self):
         """Restarts the game back to the inital state."""
 
-        self.blocks = [True for _ in xrange(0, self.BlocksAcrossCount * len(self.RowColours))]
+        self.blocks = [True for _ in range(0, self.BlocksAcrossCount * len(self.RowColours))]
 
         # Keep track of the number of blocks that are alive in each column.
         self._blocks_alive_by_column = [
-            len(self.RowColours) for _ in xrange(0, self.BlocksAcrossCount)
+            len(self.RowColours) for _ in range(0, self.BlocksAcrossCount)
             ]
 
         self.player_position = (100, self.Bounds[3] - 20)
@@ -83,9 +83,9 @@ class Engine(object):
         # Update the players position
         #
         # By prevent the player from going out of bounds.
-        new_player_x = max(self.Bounds[0] + self.PlayerWidth / 2,
+        new_player_x = max(self.Bounds[0] + self.PlayerWidth // 2,
                            self.player_position[0] + self.player_velocity)
-        new_player_x = min(self.Bounds[2] - self.PlayerWidth / 2, new_player_x)
+        new_player_x = min(self.Bounds[2] - self.PlayerWidth // 2, new_player_x)
         self.player_position = (
             new_player_x,
             self.player_position[1],
@@ -106,8 +106,8 @@ class Engine(object):
         self._handle_ball_hit_block()
 
         if ball_y > self.player_position[1]:
-            player_range = Range(self.player_position[0] - self.PlayerWidth / 2,
-                                 self.player_position[0] + self.PlayerWidth / 2)
+            player_range = Range(self.player_position[0] - self.PlayerWidth // 2,
+                                 self.player_position[0] + self.PlayerWidth // 2)
 
             if player_range.contains(ball_x):
                 # This should probably handle the making angle shots better i.e, take
@@ -156,8 +156,8 @@ class Engine(object):
             return
 
         # Compute the row and column that lies within the line of sight of the block.
-        column = (self.ball.position[0] - self.Bounds[0]) / (self.BlockWidth + self.BlockPadding)
-        row = (self.ball.position[1] - self.Bounds[1]) / (self.BlockHeight + self.BlockPadding)
+        column = (self.ball.position[0] - self.Bounds[0]) // (self.BlockWidth + self.BlockPadding)
+        row = (self.ball.position[1] - self.Bounds[1]) // (self.BlockHeight + self.BlockPadding)
 
         block_index = column + len(self._blocks_alive_by_column) * row
 
