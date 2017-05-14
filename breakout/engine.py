@@ -23,9 +23,11 @@ class Ball(object):
 
     def __init__(self, start_x, start_y):
         """Construct a ball with a starting position."""
-        self.position = [start_x, start_y]
-        self.velocity = (2, -2)
-        self.velocity = (6, -6)
+        self.start_position = [start_x, start_y]
+        self.start_velocity = (6, -6)
+
+        self.position = self.start_position
+        self.velocity = self.start_velocity
 
     def tick(self):
         """Updates the position based on the velocity."""
@@ -76,6 +78,8 @@ class Engine(object):
         self.player_score = 0
         self.player_velocity = 0
         self.is_game_over = False
+        self.ball.position = self.ball.start_position
+        self.ball.velocity = self.ball.start_velocity
         self.update()
 
     def tick(self):

@@ -72,6 +72,9 @@ def main():
                     engine.direction(left=True, pressed=False)
                 if event.key == pygame.locals.K_RIGHT:
                     engine.direction(right=True, pressed=False)
+                if event.key == pygame.locals.K_r:
+                    engine.restart()
+                    count = 0
 
         if count == 40 and not engine.is_game_over:
             engine.tick()
