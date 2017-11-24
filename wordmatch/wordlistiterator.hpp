@@ -34,7 +34,7 @@ class WordListIterator : public std::iterator<std::random_access_iterator_tag,
   std::size_t index;
   const WordList* words;
 public:
-  WordListIterator(const WordList* list, std::size_t index);
+  WordListIterator(const WordList* list, std::size_t offset);
   WordListIterator(const WordListIterator& that);
   WordListIterator& operator=(const WordListIterator& that);
   bool operator==(const WordListIterator& that) const;

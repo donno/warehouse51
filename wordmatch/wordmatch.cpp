@@ -59,13 +59,13 @@ WordListIterator& WordListIterator::operator=(const WordListIterator& that)
 }
 
 WordListIterator::difference_type WordListIterator::operator-(
-  const WordListIterator& that) const
+  const WordListIterator& rhs) const
 {
   // Determine how many words (iterations) between this and that.
   //
   // TODO: Change the iterator to keep track of the number of words not address.
   return static_cast<difference_type>((
-    this->index - that.index) / (words->length * 2 + 2));
+    index - rhs.index) / (words->length * 2 + 2));
 }
 
 bool WordListIterator::operator==(const WordListIterator& that) const
