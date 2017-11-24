@@ -381,10 +381,8 @@ int main(int argc, char* argv[]) try
       }
       return 0;
     }
-    else
-    {
-      word = std::string(argv[1]);
-    }
+
+    word = std::string(argv[1]);
   }
 
   if (word.length() + 1 < minimumWordSize)
@@ -395,7 +393,7 @@ int main(int argc, char* argv[]) try
   }
   //if (word.length() > maximumWordSize)
   //{
-  //  std::cerr << "Too many charachters. Only " << maximumWordSize 
+  //  std::cerr << "Too many charachters. Only " << maximumWordSize
   //            << " charachters are supported" << std::endl;
   //  return 1;
   //}
