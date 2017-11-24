@@ -362,7 +362,7 @@ bool Combination::next() const
   return hasNext;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char* argv[]) try
 {
   //std::string word("TEQSENUIE");
   //std::string word("CNLREAETU");
@@ -437,6 +437,11 @@ int main(int argc, char* argv[])
   }
 
   return 0;
+}
+catch (const std::runtime_error& error)
+{
+  std::cerr << "Error: " << error.what() << std::endl;
+  return 3;
 }
 
 //===--------------------------- End of the file --------------------------===//
