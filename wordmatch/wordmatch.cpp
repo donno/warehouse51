@@ -166,8 +166,8 @@ WordList::matches(std::string word) const
 template<int N>
 int compare(const void* p1, const void* p2)
 {
-  const char* const lhs = static_cast<const char* const>(p1);
-  const char* const rhs = static_cast<const char* const>(p2);
+  const auto* const lhs = static_cast<const char* const>(p1);
+  const auto* const rhs = static_cast<const char* const>(p2);
   return std::strncmp(lhs, rhs, N);
 }
 
