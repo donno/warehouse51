@@ -57,6 +57,9 @@ public:
   // If Count() is 1 then this is the result of the expression.
   operand_type FirstValue() const;
 
+  // Converts the expression to inflix as a string.
+  std::string ToInflixString() const;
+
 private:
   static PostfixExpression EvaluateOnce(PostfixExpression Expression);
 

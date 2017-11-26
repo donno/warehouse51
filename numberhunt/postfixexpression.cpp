@@ -75,6 +75,40 @@ PostfixExpression::operand_type PostfixExpression::FirstValue() const
     return std::get<PostfixExpression::operand_type>(myItems.front());
 }
 
+std::string PostfixExpression::ToInflixString() const
+{
+    // TODO: Eliminate the most common unessararcy parenthesis from the
+    // resulting expression.
+
+    std::vector<std::string> stack;
+    for (const auto& item : myItems)
+    {
+        if (local::IsOperator(item))
+        {
+            if (stack.size() < 2) std::terminate();
+
+            const auto op = std::get<operator_type>(item);
+            auto firstOperand = std::prev(stack.end(), 2);
+            const auto& secondOperand = stack.back();
+
+            // Replace the two elements on the stack with a single element.
+            *firstOperand = '(' + *firstOperand + ' ' + static_cast<char>(op) +
+                ' ' + secondOperand + ')';
+            stack.pop_back();
+        }
+        else
+        {
+            // item is an operand.
+            const auto operand = std::get<operand_type>(item);
+            stack.push_back(std::to_string(operand));
+        }
+    }
+
+    if (stack.size() != 1) std::terminate(); // error: failed
+
+    return stack.front();
+}
+
 PostfixExpression
 PostfixExpression::EvaluateOnce(PostfixExpression Expression)
 {
