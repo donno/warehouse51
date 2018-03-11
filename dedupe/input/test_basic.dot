@@ -1,0 +1,9 @@
+digraph "basic" {
+      "Task-11894" [color="#03A9F4"]
+      "Task-11838" [color="#03A9F4"]
+      "Task-11880" [color="#03A9F4"]
+
+      "Task-11894" -> "Task-11838";
+      "Task-11894" -> "Task-11880";
+      "Task-11880" -> "Task-11838";
+}
