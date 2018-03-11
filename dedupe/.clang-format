@@ -1,0 +1,44 @@
+---
+# See https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+
+Language:        Cpp
+ColumnLimit:     79
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+SortIncludes:    true
+NamespaceIndentation: All
+MaxEmptyLinesToKeep:  1
+
+BreakBeforeBraces: Allman
+# Do: if (!status)
+# {
+# }
+# Not: if (!status) {
+# }
+
+SpacesInAngles: false
+# Do: template<typename T, typename S>
+# Not: template< typename T, typename S >
+
+SpacesInParentheses: false
+# Do: if (!status) { std::string foo("hello"); v.push_back(foo); }
+# Not: if ( !status ) { std::string foo( "hello" ); v.push_back( foo ); }
+
+SpacesInSquareBrackets: false
+# Do: int a[5];
+# Not: int a[ 5 ];
+
+AllowShortIfStatementsOnASingleLine: true
+# Do: if (!status) return;
+# Not: if (!status)
+#   return;
+
+PointerAlignment: Left
+# Do: int* a;
+# Not: int *a; int * b;
+
+FixNamespaceComments: false
+# Do not: Add a // namespace comment to the end of a namespace.
+...
+

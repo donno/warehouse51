@@ -101,8 +101,8 @@ void all_paths_helper(vertex_t from, vertex_t to, graph_t const& g,
 
     if (from == to)
     {
-        // Ideally we would check the result of callback if it had one otherwise
-        // ignore it.
+        // Ideally we would check the result of callback if it had one
+        // otherwise ignore it.
         callback(path);
     }
     else
@@ -130,13 +130,12 @@ void all_paths(vertex_t from, vertex_t to, graph_t const& graph,
 std::size_t longest_path_length(const graph_t& graph, vertex_t u, vertex_t v)
 {
     std::size_t longestPathLength = 0;
-    all_paths(u, v, graph, [&](path_t const &path)
-              {
-                    if (longestPathLength < path.size())
-                    {
-                        longestPathLength = path.size();
-                    }
-              });
+    all_paths(u, v, graph, [&](path_t const& path) {
+        if (longestPathLength < path.size())
+        {
+            longestPathLength = path.size();
+        }
+    });
     return longestPathLength;
 }
 
@@ -199,11 +198,8 @@ void find_edges_to_remove(const graph_t& graph)
             {
                 // Remove the short path as there is a longer path we must
                 // travel to get to v.
-                std::cout << "Remove:Edge:"
-                        << boost::get(index_to_name, u)
-                        << ":"
-                        << boost::get(index_to_name, v)
-                        << std::endl;
+                std::cout << "Remove:Edge:" << boost::get(index_to_name, u)
+                          << ":" << boost::get(index_to_name, v) << std::endl;
             }
         }
     }
@@ -232,15 +228,11 @@ void find_edges_to_remove_v2(const graph_t& graph)
         {
             // Remove the short path as there is a longer path we must
             // travel to get to v.
-            std::cout << "Remove:Edge:"
-                    << boost::get(index_to_name, u)
-                    << ":"
-                    << boost::get(index_to_name, v)
-                    << std::endl;
+            std::cout << "Remove:Edge:" << boost::get(index_to_name, u) << ":"
+                      << boost::get(index_to_name, v) << std::endl;
         }
         ++current_edge;
-        std::cerr << "Progress:Removal:"
-                  << current_edge << ":" << edge_count
+        std::cerr << "Progress:Removal:" << current_edge << ":" << edge_count
                   << std::endl;
         if (current_edge > edge_process_limit)
         {
