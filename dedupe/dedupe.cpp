@@ -55,6 +55,22 @@ namespace property_lists
     using edge_p = boost::no_property;
     using graph_t = boost::adjacency_list<boost::vecS, boost::vecS,
                                           boost::directedS, vertex_p, edge_p>;
+
+    struct VertexToName
+    {
+        VertexToName(const graph_t& graph)
+            : index_to_name(boost::get(boost::vertex_name, graph))
+        {
+        }
+
+        std::string operator()(graph_t::vertex_descriptor vertex) const
+        {
+            return boost::get(index_to_name, vertex);
+        }
+
+        decltype(boost::get(boost::vertex_name,
+                            std::declval<graph_t>())) index_to_name;
+    };
 }
 
 namespace bundled_properties
@@ -75,12 +91,28 @@ namespace bundled_properties
 
     using graph_t = boost::adjacency_list<boost::vecS, boost::vecS,
                                           boost::directedS, Vertex, Edge>;
+
+    struct VertexToName
+    {
+        VertexToName(const graph_t& graph) : graph(graph) {}
+
+        std::string operator()(graph_t::vertex_descriptor vertex) const
+        {
+            return graph[vertex].name;
+        }
+
+      private:
+        const graph_t& graph;
+    };
 }
 
+#define USE_PROPERTY_LISTS
 #ifdef USE_PROPERTY_LISTS
 using graph_t = property_lists::graph_t;
+using vertex_to_name_t = property_lists::VertexToName;
 #else
 using graph_t = bundled_properties::graph_t;
+using vertex_to_name_t = bundled_properties::VertexToName;
 #endif
 using vertex_t = graph_t::vertex_descriptor;
 using path_t = std::vector<graph_t::vertex_descriptor>;
@@ -195,16 +227,7 @@ void find_edges_to_remove(const graph_t& graph)
     std::vector<int> topo_order(boost::num_vertices(graph));
     boost::topological_sort(graph, topo_order.rbegin());
 
-#ifdef USE_PROPERTY_LISTS
-    auto index_to_name = boost::get(boost::vertex_name, graph);
-    const auto lookup_name = [&](vertex_t vertex) {
-        return boost::get(index_to_name, vertex);
-    };
-#else
-    const auto lookup_name = [&](vertex_t vertex) {
-        return graph[vertex].name;
-    };
-#endif
+    const vertex_to_name_t vertex_to_name(graph);
 
     // Next produce the combinations of the nodes.
     for (std::size_t i = 0; i < topo_order.size(); ++i)
@@ -228,8 +251,8 @@ void find_edges_to_remove(const graph_t& graph)
             {
                 // Remove the short path as there is a longer path we must
                 // travel to get to v.
-                std::cout << "Remove:Edge:" << lookup_name(u) << ":"
-                          << lookup_name(v) << std::endl;
+                std::cout << "Remove:Edge:" << vertex_to_name(u) << ":"
+                          << vertex_to_name(v) << std::endl;
             }
         }
     }
@@ -245,17 +268,7 @@ void find_edges_to_remove_v2(const graph_t& graph)
     // const auto limit = std::numeric_limits<std::size_t>::max();
     const auto edge_process_limit = 150;
 
-#ifdef USE_PROPERTY_LISTS
-    auto index_to_name = boost::get(boost::vertex_name, graph);
-    const auto lookup_name = [&index_to_name](vertex_t vertex) {
-        return boost::get(index_to_name, vertex);
-    };
-#else
-    const auto lookup_name = [&graph](vertex_t vertex) {
-        return graph[vertex].name;
-    };
-#endif
-
+    const vertex_to_name_t vertex_to_name(graph);
     const auto edge_count = boost::num_edges(graph);
     std::size_t current_edge = 0;
     for (const auto& edge : boost::make_iterator_range(boost::edges(graph)))
@@ -268,8 +281,8 @@ void find_edges_to_remove_v2(const graph_t& graph)
         {
             // Remove the short path as there is a longer path we must
             // travel to get to v.
-            std::cout << "Remove:Edge:" << lookup_name(u) << ":"
-                      << lookup_name(v) << std::endl;
+            std::cout << "Remove:Edge:" << vertex_to_name(u) << ":"
+                      << vertex_to_name(v) << std::endl;
         }
         ++current_edge;
         std::cerr << "Progress:Removal:" << current_edge << ":" << edge_count
