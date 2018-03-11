@@ -224,42 +224,6 @@ std::size_t length_first_non_trival_path(const graph_t& graph, vertex_t u,
 
 void find_edges_to_remove(const graph_t& graph)
 {
-    std::vector<int> topo_order(boost::num_vertices(graph));
-    boost::topological_sort(graph, topo_order.rbegin());
-
-    const vertex_to_name_t vertex_to_name(graph);
-
-    // Next produce the combinations of the nodes.
-    for (std::size_t i = 0; i < topo_order.size(); ++i)
-    {
-        for (std::size_t j = i + 1; j < topo_order.size(); ++j)
-        {
-            auto u = topo_order[i];
-            auto v = topo_order[j];
-
-            // The following is only required if there exists an edge from
-            // u to v as otherwise there will be nothing to remove.
-            const auto result = boost::edge(u, v, graph);
-
-            if (!result.second) continue;
-
-            // Find all the paths from u to v and take the longest.
-            //
-            // TODO: I think this really just needs to be find a path to
-            // v that is longer than 2.
-            if (longest_path_length(graph, u, v) > 2)
-            {
-                // Remove the short path as there is a longer path we must
-                // travel to get to v.
-                std::cout << "Remove:Edge:" << vertex_to_name(u) << ":"
-                          << vertex_to_name(v) << std::endl;
-            }
-        }
-    }
-}
-
-void find_edges_to_remove_v2(const graph_t& graph)
-{
     // For each edge (u, v) or (source, target) in the graph:
     // - Determine if there exists a path from u to v that doesn't invovle the
     // edge.
@@ -332,6 +296,6 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    find_edges_to_remove_v2(graph);
+    find_edges_to_remove(graph);
     return 0;
 }
