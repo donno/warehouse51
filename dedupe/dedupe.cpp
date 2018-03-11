@@ -298,15 +298,23 @@ void find_edges_to_remove_v2(const graph_t& graph)
 
 int main(int argc, const char* argv[])
 {
+    std::istream* input = &std::cin;
+
     std::fstream inputFile;
     if (argc == 2)
     {
         inputFile.open(argv[1], std::fstream::in);
+        if (!inputFile)
+        {
+            std::cerr << "Failed to open file" << std::endl;
+            return 1;
+        }
+
+        input = &inputFile;
     }
     else if (argc == 1)
     {
-        // TODO: Use standard in here instead.
-        inputFile.open("test_basic.dot", std::fstream::in);
+        // The input stream already points to standard in.
     }
     else
     {
@@ -314,16 +322,10 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    if (!inputFile)
-    {
-        std::cerr << "Failed to open file" << std::endl;
-        return 1;
-    }
-
     graph_t graph(0);
     boost::dynamic_properties dp(boost::ignore_other_properties);
     setup_properties(&graph, &dp);
-    bool status = boost::read_graphviz(inputFile, graph, dp, "node_id");
+    bool status = boost::read_graphviz(*input, graph, dp, "node_id");
     if (!status)
     {
         std::cerr << "Failed to read file" << std::endl;
