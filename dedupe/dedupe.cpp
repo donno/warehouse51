@@ -75,15 +75,21 @@ namespace bundled_properties
 
     using graph_t = boost::adjacency_list<boost::vecS, boost::vecS,
                                           boost::directedS, Vertex, Edge>;
-
-    // TODO: Provide a function for reading properties from graphviz.
 }
 
+#ifdef USE_PROPERTY_LISTS
 using graph_t = property_lists::graph_t;
-// using graph_t = bundled_properties::graph_t; // Unsupported due to the TODO
-// above about reading graphviz.
+#else
+using graph_t = bundled_properties::graph_t;
+#endif
 using vertex_t = graph_t::vertex_descriptor;
 using path_t = std::vector<graph_t::vertex_descriptor>;
+
+// Set-up the properties for reading from a GraphViz file.
+void setup_properties(property_lists::graph_t* graph,
+                      boost::dynamic_properties* dp);
+void setup_properties(bundled_properties::graph_t* graph,
+                      boost::dynamic_properties* dp);
 
 // Return the length of the longest path between u and v in graph.
 std::size_t longest_path_length(const graph_t& graph, vertex_t u, vertex_t v);
@@ -125,6 +131,21 @@ void all_paths(vertex_t from, vertex_t to, graph_t const& graph,
 {
     path_t state;
     all_paths_helper(from, to, graph, state, callback);
+}
+
+void setup_properties(property_lists::graph_t* graph,
+                      boost::dynamic_properties* dp)
+{
+    boost::property_map<property_lists::graph_t, boost::vertex_name_t>::type
+        name = boost::get(boost::vertex_name, *graph);
+    dp->property("node_id", name);
+}
+
+void setup_properties(bundled_properties::graph_t* graph,
+                      boost::dynamic_properties* dp)
+{
+    dp->property("node_id",
+                 boost::get(&bundled_properties::Vertex::name, *graph));
 }
 
 std::size_t longest_path_length(const graph_t& graph, vertex_t u, vertex_t v)
@@ -174,7 +195,16 @@ void find_edges_to_remove(const graph_t& graph)
     std::vector<int> topo_order(boost::num_vertices(graph));
     boost::topological_sort(graph, topo_order.rbegin());
 
+#ifdef USE_PROPERTY_LISTS
     auto index_to_name = boost::get(boost::vertex_name, graph);
+    const auto lookup_name = [&](vertex_t vertex) {
+        return boost::get(index_to_name, vertex);
+    };
+#else
+    const auto lookup_name = [&](vertex_t vertex) {
+        return graph[vertex].name;
+    };
+#endif
 
     // Next produce the combinations of the nodes.
     for (std::size_t i = 0; i < topo_order.size(); ++i)
@@ -198,8 +228,8 @@ void find_edges_to_remove(const graph_t& graph)
             {
                 // Remove the short path as there is a longer path we must
                 // travel to get to v.
-                std::cout << "Remove:Edge:" << boost::get(index_to_name, u)
-                          << ":" << boost::get(index_to_name, v) << std::endl;
+                std::cout << "Remove:Edge:" << lookup_name(u) << ":"
+                          << lookup_name(v) << std::endl;
             }
         }
     }
@@ -215,7 +245,17 @@ void find_edges_to_remove_v2(const graph_t& graph)
     // const auto limit = std::numeric_limits<std::size_t>::max();
     const auto edge_process_limit = 150;
 
+#ifdef USE_PROPERTY_LISTS
     auto index_to_name = boost::get(boost::vertex_name, graph);
+    const auto lookup_name = [&index_to_name](vertex_t vertex) {
+        return boost::get(index_to_name, vertex);
+    };
+#else
+    const auto lookup_name = [&graph](vertex_t vertex) {
+        return graph[vertex].name;
+    };
+#endif
+
     const auto edge_count = boost::num_edges(graph);
     std::size_t current_edge = 0;
     for (const auto& edge : boost::make_iterator_range(boost::edges(graph)))
@@ -228,8 +268,8 @@ void find_edges_to_remove_v2(const graph_t& graph)
         {
             // Remove the short path as there is a longer path we must
             // travel to get to v.
-            std::cout << "Remove:Edge:" << boost::get(index_to_name, u) << ":"
-                      << boost::get(index_to_name, v) << std::endl;
+            std::cout << "Remove:Edge:" << lookup_name(u) << ":"
+                      << lookup_name(v) << std::endl;
         }
         ++current_edge;
         std::cerr << "Progress:Removal:" << current_edge << ":" << edge_count
@@ -269,10 +309,7 @@ int main(int argc, const char* argv[])
 
     graph_t graph(0);
     boost::dynamic_properties dp(boost::ignore_other_properties);
-    boost::property_map<graph_t, boost::vertex_name_t>::type name =
-        boost::get(boost::vertex_name, graph);
-    dp.property("node_id", name);
-
+    setup_properties(&graph, &dp);
     bool status = boost::read_graphviz(inputFile, graph, dp, "node_id");
     if (!status)
     {
