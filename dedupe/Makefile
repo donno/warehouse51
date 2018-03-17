@@ -5,14 +5,11 @@ DEDUPE=dedupe
 
 test: output/test_example_remove.list output/test_basic_remove.list
 
-output/test_example_remove.list: input/test_example.dot $(DEDUPE)
-	mkdir -p output
-	./$(DEDUPE) $< > $@
-	cat $@
-	sort $@ -o $@
 
-output/test_basic_remove.list: input/test_basic.dot $(DEDUPE)
+output:
 	mkdir -p output
+
+output/%_remove.list: input/%.dot output $(DEDUPE)
 	./$(DEDUPE) $< > $@
 	cat $@
 	sort $@ -o $@
