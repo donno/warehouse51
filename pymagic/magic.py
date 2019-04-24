@@ -8,6 +8,8 @@ import json
 import zipfile
 import os.path
 
+from reader import Card, Set, parse_lines
+
 class SplitCard:
     # Example
     #1 Integrity // Intervention (GRN) 227
@@ -141,81 +143,51 @@ def format_card(card):
 def load_list(path, sets, expand=True):
     """Loads a list of containing the set code and the card numbers.
 
-    expand: Expand out duplicates so the resulting list contains the duplicates.
-            Otherwise each item will contain the number of duplicates instead.
+    expand: Expand out duplicates (multiples) so the resulting sequence
+            contains the duplicates. Otherwise each item will contain the
+            number of duplicates instead.
     """
+
     # TODO: Build as state machine for this. ideally it should keep going
     # until it gets a set code.
-
     current_set = None
     card_in_set_by_number = {}
     with open(path, 'r') as reader:
-        for line in reader:
-            # Ignore comments
-            line, _, comment = line.partition('#')
-            comment = comment.strip()
-            line = line.strip()
-            if line.startswith('#'):
-                continue
-
-            if not current_set:
-                current_set = sets.get(line)
-                if current_set:
-                    card_in_set_by_number = dict(cards_by_number(current_set['cards']))
-                    #print(current_set['code'] + ' ' + current_set['name'] + ' - ' + current_set['releaseDate'])
-                elif line.startswith('PRM'):
+        for item in parse_lines(reader, expand):
+            if isinstance(item, Set):
+                if item.code == 'PRM':
                     print('Skipping promos')
-                elif line:
-                    raise ValueError("Invalid set '%s'" % line)
-            elif line.startswith('==='):
-                # This should appear after a set before the card list. It just helps separate the code from the numbers.
-                pass
-            elif not line:
-                # END OF A LIST? set
-                #print('End of set')
-                current_set = None
-            else:
-                # The # is denoting a comment so it ignores the rest of the line.
-                #
-                # Ideally, I would like for that information to be preserved incase the output format supports it.
-                code, _, _ = line.partition('#')
-                code, _, multiplier = code.partition('*')
-                multiplier = int(multiplier.strip() or '1')
+                    continue
 
-                if 'a' in code:
-                    # Split cards
-                    #print(code)
-                    code = str(int(code.strip()[:-1]))
-                    #print(code + '[after')
+                current_set = sets.get(item.code)
+                card_in_set_by_number = dict(cards_by_number(current_set['cards']))
+                if not current_set:
+                    raise ValueError("Invalid set '%s'" % item.code)
+            elif current_set and isinstance(item, Card):
+                # Card
+                try:
+                    card = card_in_set_by_number[str(item.number)]
 
-                    # Alternative find all the cards incase there is a three card...
-                    if code in card_in_set_by_number:
-                        card_a = card_in_set_by_number[str(code)]
+                    # TODO: Split cards are not going to give the right
+                    # information.
+                    if card["layout"] == "split":
+                        card_a = card
                         card_b = card_a.copy()
 
-                        # This fakes it, I suspect a number of the properties
-                        # for part B is not going to be correct.
+                        # This isn't quite right as I suspect a number of the properties
+                        # for part B are not going to be correct. Like split cards can be
+                        # instant on one half and sorcery on the other.
                         card_b['name'] = card_a['names'][1]
                         card = SplitCard(card_a, card_b)
                     else:
-                        card_a = card_in_set_by_number[str(code) + 'a']
-                        card_b = card_in_set_by_number[str(code) + 'b']
-                        card = SplitCard(card_a, card_b)
-                else:
-                    code, _, kind = code.partition(':')
+                        assert 'multiverseId' in card, 'no multiverse ID for ' + card['name']
+                except KeyError:
+                    raise KeyError('Could not find %d in %s' % (item.number, current_set['code']))
 
-                    code = int(code.strip())
-                    try:
-                        card = card_in_set_by_number[str(code)]
-                    except KeyError:
-                        raise KeyError('Could not find %d in %s' % (code, current_set['code']))
-
-                    assert 'multiverseId' in card, 'no multiverse ID for ' + card['name']
                 if expand:
-                    for _ in range(multiplier):
-                        yield current_set['code'], card
+                    yield current_set['code'], card
                 else:
-                    yield current_set['code'], multiplier, card
+                    yield current_set['code'], item.count, card
 
 format_card_mtga = MTGAFormat.format_card
 
