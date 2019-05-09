@@ -4,7 +4,7 @@
 // SUMMARY      : Match a bunch of jumbled letters with words.
 // COPYRIGHT    : (c) 2014 Sean Donnellan. All Rights Reserved.
 // LICENSE      : The MIT License (see LICENSE.txt for details)
-// DESCRIPTION: : This is was intented to be a solver for the Letters game in
+// DESCRIPTION: : This is was intended to be a solver for the Letters game in
 //                Countdown.
 //
 //                http://en.wikipedia.org/wiki/Countdown_%28game_show%29
@@ -89,8 +89,8 @@ Word WordListIterator::operator*() const
 WordListIterator& WordListIterator::operator++()
 {
   // Add the length to take into account the sorted version of the
-  // word, and again for the unsorted version and then 2 charachters
-  // for the trailing null charachter and new-line.
+  // word, and again for the unsorted version and then 2 characters
+  // for the trailing null character and new-line.
   index += words->length + words->length + 2;
   return *this;
 }
@@ -98,8 +98,8 @@ WordListIterator& WordListIterator::operator++()
 WordListIterator& WordListIterator::operator+=(unsigned int wordCount)
 {
   // Add the length to take into account the sorted version of the
-  // word, and again for the unsorted version and then 2 charachters
-  // for the trailing null charachter and new-line.
+  // word, and again for the unsorted version and then 2 characters
+  // for the trailing null character and new-line.
   index += (words->length + words->length + 2) * wordCount;
   return *this;
 }
@@ -388,13 +388,13 @@ int main(int argc, char* argv[]) try
   if (word.length() + 1 < minimumWordSize)
   {
     std::cerr << "Must be at least " << (minimumWordSize + 1)
-              << " charachters." << std::endl;
+              << " characters." << std::endl;
     return 1;
   }
   //if (word.length() > maximumWordSize)
   //{
-  //  std::cerr << "Too many charachters. Only " << maximumWordSize
-  //            << " charachters are supported" << std::endl;
+  //  std::cerr << "Too many characters. Only " << maximumWordSize
+  //            << " characters are supported" << std::endl;
   //  return 1;
   //}
 
