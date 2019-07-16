@@ -1,5 +1,5 @@
-#ifndef BASIC_PARSER_HPP
-#define BASIC_PARSER_HPP
+#ifndef BASIC_LEXER_HPP
+#define BASIC_LEXER_HPP
 //===----------------------------------------------------------------------===//
 //
 // Performs lexical analysis on an input stream. The lexical grammar followed
@@ -22,7 +22,7 @@
 #include <variant>
 #include <vector>
 
-namespace basic::parser
+namespace basic::lexer
 {
     struct Identifier
     {

@@ -5,18 +5,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "parser.hpp"
+#include "lexer.hpp"
 
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
 
-static basic::parser::Token parse_identifier(std::istream& input, char first);
-static basic::parser::Token parse_integer(std::istream& input, char first);
-static basic::parser::Token parse_integer_base_16(std::istream& input);
-static basic::parser::Token parse_string(std::istream& input);
+static basic::lexer::Token parse_identifier(std::istream& input, char first);
+static basic::lexer::Token parse_integer(std::istream& input, char first);
+static basic::lexer::Token parse_integer_base_16(std::istream& input);
+static basic::lexer::Token parse_string(std::istream& input);
 
-basic::parser::Token parse_identifier(std::istream& input, char first)
+basic::lexer::Token parse_identifier(std::istream& input, char first)
 {
     // This also supports sigils on the end of variable name that imply the
     // type of variables in QBasic.
@@ -33,10 +33,10 @@ basic::parser::Token parse_identifier(std::istream& input, char first)
     {
         tokens.push_back(input.get());
     }
-    return basic::parser::Identifier{tokens};
+    return basic::lexer::Identifier{tokens};
 }
 
-basic::parser::Token parse_integer(std::istream& input, char first)
+basic::lexer::Token parse_integer(std::istream& input, char first)
 {
     std::string tokens(1, first);
     for (char c = input.peek(); std::isdigit(c); c = input.peek())
@@ -46,7 +46,7 @@ basic::parser::Token parse_integer(std::istream& input, char first)
     return {std::stoi(tokens)};
 }
 
-basic::parser::Token parse_integer_base_16(std::istream& input)
+basic::lexer::Token parse_integer_base_16(std::istream& input)
 {
     const char hex = input.peek();
     assert(hex == 'H'); // TODO: THis should probably throw an error.
@@ -60,7 +60,7 @@ basic::parser::Token parse_integer_base_16(std::istream& input)
     return {std::stoi(tokens, 0, 16)};
 }
 
-basic::parser::Token parse_string(std::istream& input)
+basic::lexer::Token parse_string(std::istream& input)
 {
     // TODO: Handle escaping of the ".
     std::string value;
@@ -76,7 +76,7 @@ basic::parser::Token parse_string(std::istream& input)
     return value;
 }
 
-basic::parser::Token basic::parser::parse(std::istream& input)
+basic::lexer::Token basic::lexer::parse(std::istream& input)
 {
     constexpr char sorted_symbols[] = {
         '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>',
@@ -124,7 +124,7 @@ basic::parser::Token basic::parser::parse(std::istream& input)
     return {};
 }
 
-std::vector<basic::parser::Token> basic::parser::parse_all(
+std::vector<basic::lexer::Token> basic::lexer::parse_all(
     std::istream& input)
 {
     std::vector<Token> tokens;
@@ -145,7 +145,7 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    using namespace basic::parser;
+    using namespace basic::lexer;
 
     std::fstream s(argv[1], std::fstream::in);
     for (const auto& token : parse_all(s))

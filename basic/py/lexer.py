@@ -1,4 +1,5 @@
-"""Parses a stream of characters into tokens (lexeme) for a BASIC language.
+"""Parses (tokenizers) a stream of characters into tokens (lexeme) for a BASIC
+language.
 
 Copyright (C) 2019 Sean Donnellan.
 SPDX-License-Identifier: MIT
@@ -233,6 +234,6 @@ def parse(reader):
         yield _terminate()
 
 if __name__ == '__main__':
-    with open('lexer_example.bas') as reader:
+    with open('../tests/lexer_example.bas') as reader:
         for token in parse(reader):
             print(token)
