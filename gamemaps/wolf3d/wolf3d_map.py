@@ -104,7 +104,7 @@ def level_header(reader, level_offset):
 
     width = read_uint16le(reader)
     height = read_uint16le(reader)
-    name = reader.read(16).decode('ascii')
+    name = reader.read(16).split(b'\x00')[0].decode('ascii')
 
     # For Wolfenstein 3D there is another 4-byte string which is !ID! which
     # shows the different between v1.0 and v1.1
