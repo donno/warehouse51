@@ -46,21 +46,21 @@ class LevelHeader:
         return self.width, self.height
 
 
-def map_headers(path):
+def map_headers(reader):
     """Read the map header file (MAPHEAD).
 
     The file format is as such:
         magic : uint16le
         level pointers : int32le (100 of them).
     """
-    with open(path, 'rb') as reader:
-        magic = int.from_bytes(reader.read(
-            2), byteorder='little', signed=False)
-        uses_rlew_compression = magic == 0xABCD
-        levels = [
-            int.from_bytes(reader.read(4), byteorder='little', signed=True)
-            for _ in range(100)
-        ]
+
+    magic = int.from_bytes(reader.read(
+        2), byteorder='little', signed=False)
+    uses_rlew_compression = magic == 0xABCD
+    levels = [
+        int.from_bytes(reader.read(4), byteorder='little', signed=True)
+        for _ in range(100)
+    ]
 
     # Should we remove 0 and -1 where there are no levels?
     return uses_rlew_compression, levels
@@ -267,7 +267,9 @@ def read_plane(reader, plane_offset, plane_length, is_rlew_compressed):
 
 
 def main():
-    uses_rlew_compression, level_offsets = map_headers('MAPHEAD.WL6')
+    with open('MAPHEAD.WL6', 'rb') as reader:
+        uses_rlew_compression, level_offsets = map_headers(reader)
+
     print('Level count: %s' % sum(1 for level in level_offsets if level > 0))
 
     with open('GAMEMAPS.WL6', 'rb') as f:
