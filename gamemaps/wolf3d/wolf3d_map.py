@@ -14,6 +14,8 @@ data is 3190, which also includes the size at the start.
 
 import io
 
+from PIL import Image
+
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright 2020, Sean Donnellan"
 __license__ = "MIT"
@@ -266,6 +268,27 @@ def read_plane(reader, plane_offset, plane_length, is_rlew_compressed):
     return decompress_rlew(rlew_compressed_plane_data)
 
 
+def save_plane_to_image(level, plane, filename):
+    tile_width, tile_height = 16, 16
+
+    level_image = Image.new('RGB', (level.width * tile_width,
+                                    level.height * tile_height))
+
+    def row_column():
+        for row in range(level.height):
+            for column in range(level.width):
+                yield row, column
+
+    for (row, column), tile_index in zip(row_column(), plane):
+        # Map the tile to a colour for now.
+        tile = (tile_index, tile_index, tile_index)
+        level_image.paste(tile, (column * tile_width, row * tile_height,
+                                (column + 1) * tile_width,
+                                (row + 1) * tile_height))
+
+    level_image.save(filename, 'PNG')
+
+
 def main():
     with open('MAPHEAD.WL6', 'rb') as reader:
         uses_rlew_compression, level_offsets = map_headers(reader)
@@ -276,7 +299,7 @@ def main():
         magic = f.read(8)
         assert magic == b'TED5v1.0'
 
-        for level_offset in level_offsets:
+        for level_index, level_offset in enumerate(level_offsets):
             if level_offset == 0:
                 break
 
@@ -285,6 +308,9 @@ def main():
             plane = read_plane(f, offset_to_plane_0, length_of_plane_0,
                                uses_rlew_compression)
 
+            save_plane_to_image(
+                level, plane,
+                filename='wolf3d_level_%d.png' % (level_index + 1))
 
 if __name__ == '__main__':
     main()
