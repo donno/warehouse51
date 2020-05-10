@@ -6,6 +6,9 @@ And http://www.shikadi.net/moddingwiki/GameMaps_Format
 
 Additional information http://files.keenmodding.org/mobydoc.txt
 
+More details are at which cover the VSWAP file.
+  https://devinsmith.net/backups/bruce/wolf3d.html
+
 For retail v1.1 of wolf map 1 has the following properties:
 Compressed size of the first plane is 1434 which an extra 2 bytes at the start
 for the the uncompressed size. The stored length of the Carmack decompressed
@@ -289,11 +292,77 @@ def save_plane_to_image(level, plane, filename):
     level_image.save(filename, 'PNG')
 
 
+def read_video_swap(reader):
+    """Read the VSWAP.WL6 which contains the wall tiles.
+
+    struct Header
+    {
+        uint16_t ChunkCount;
+        uint16_t SpriteStart;
+        uint16_t SoundStart;
+        uint32_t ChunkOffsets[ChunkCount];
+        uint16_t ChunkLengths[ChunkCount];
+    };
+
+    The SpriteStart and SoundStart are the indices in the chunks.
+    The chunks are: [walls, spirtes, sounds]
+    """
+    chunk_count = int.from_bytes(
+        reader.read(2), byteorder='little', signed=False)
+    sprite_start = int.from_bytes(
+        reader.read(2), byteorder='little', signed=False)
+    sound_start = int.from_bytes(
+        reader.read(2), byteorder='little', signed=False)
+    assert sprite_start < sound_start
+
+    chunk_offsets = [
+        int.from_bytes(reader.read(4), byteorder='little', signed=False)
+        for _ in range(chunk_count)
+        ]
+
+    chunk_lengths = [
+        int.from_bytes(reader.read(2), byteorder='little', signed=False)
+        for _ in range(chunk_count)
+        ]
+
+    chunks = list(zip(chunk_offsets, chunk_lengths))
+    # for index, (offset, length) in enumerate(chunks):
+    #     print('Wall' if index < sprite_start else
+    #           ('Sprite' if index  < sound_start else 'Sound'))
+
+    # wall_chunks = chunks[:sprite_start]
+    # for offset, length in wall_chunks:
+    #     reader.seek(offset)
+    #     wall_raw = reader.read(length)
+
+    sprite_chunks = chunks[sprite_start:sound_start]
+    for offset, length in sprite_chunks:
+        reader.seek(offset)
+        sprite_reader = io.BytesIO(reader.read(length))
+
+        left_pixel = int.from_bytes(
+            sprite_reader.read(2), byteorder='little', signed=False)
+        right_pixel = int.from_bytes(
+            sprite_reader.read(2), byteorder='little', signed=False)
+
+        # Then 64 column offsets.
+        column_offset = [
+            int.from_bytes(
+                sprite_reader.read(2), byteorder='little', signed=False)
+            for _ in range(64)
+            ]
+
+        # TODO: This is incomplete.
+
+
 def main():
     with open('MAPHEAD.WL6', 'rb') as reader:
         uses_rlew_compression, level_offsets = map_headers(reader)
 
     print('Level count: %s' % sum(1 for level in level_offsets if level > 0))
+
+    with open('VSWAP.WL6', 'rb') as reader:
+        read_video_swap(reader)
 
     with open('GAMEMAPS.WL6', 'rb') as f:
         magic = f.read(8)
