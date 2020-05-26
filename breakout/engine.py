@@ -58,6 +58,7 @@ class Engine(object):
         self.player_score = 0
         self.player_velocity = 0
         self.is_game_over = False
+        self._restart_next_tick = False
 
         ball_x = self.Bounds[0] + (self.Bounds[2] - self.Bounds[0]) // 2
 
@@ -65,7 +66,7 @@ class Engine(object):
         self.restart()
 
     def restart(self):
-        """Restarts the game back to the inital state."""
+        """Restarts the game back to the initial state."""
 
         self.blocks = [True for _ in range(0, self.BlocksAcrossCount * len(self.RowColours))]
 
@@ -82,8 +83,23 @@ class Engine(object):
         self.ball.velocity = self.ball.start_velocity
         self.update()
 
+    def restart_on_next_tick(self):
+        """Delays the restart of the game back to the initial state until the
+        next tick.
+
+        This is useful if the restart occurs on another thread (say the input
+        thread).
+        """
+        self._restart_next_tick = True
+
     def tick(self):
         """Performs one tick of the engine to update the positions."""
+
+        if self._restart_next_tick:
+            self._restart_next_tick = False
+            self.restart()
+            return
+
         # Update the players position
         #
         # By prevent the player from going out of bounds.
@@ -200,6 +216,10 @@ def handle_inputs(engine, force_keyboard=False):
             elif event.code == 'KEY_RIGHT' or event.code == 'BTN_EAST':
                 if history.get(event.code, 0) != event.state:
                     engine.direction(right=True, pressed=event.state == 1)
+                history[event.code] = event.state
+            elif event.code == 'BTN_SELECT':
+                if history.get(event.code, 0) != event.state:
+                    engine.restart_on_next_tick()
                 history[event.code] = event.state
             if event.code == 'KEY_ESC':
                 return True
