@@ -177,23 +177,27 @@ class Engine(object):
 
         return False
 
-def handle_inputs(engine):
+def handle_inputs(engine, force_keyboard=False):
     """Handle user input using the https://github.com/zeth/inputs
 
     This may be helpful if the user interface library you are using doesn't
     provide its own way of accessing the inputs.
     """
-    from inputs import get_key
+    from inputs import devices, get_key, get_gamepad
+    if force_keyboard:
+        input_function = get_key
+    else:
+        input_function = get_gamepad if devices.gamepads else get_key
 
     history = {}
     while True:
-        events = get_key()
+        events = input_function()
         for event in events:
-            if event.code == 'KEY_LEFT':
+            if event.code == 'KEY_LEFT' or event.code == 'BTN_WEST':
                 if history.get(event.code, 0) != event.state:
                     engine.direction(left=True, pressed=event.state == 1)
                 history[event.code] = event.state
-            if event.code == 'KEY_RIGHT':
+            elif event.code == 'KEY_RIGHT' or event.code == 'BTN_EAST':
                 if history.get(event.code, 0) != event.state:
                     engine.direction(right=True, pressed=event.state == 1)
                 history[event.code] = event.state
