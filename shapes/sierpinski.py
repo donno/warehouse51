@@ -37,30 +37,13 @@ def _divide(triangle, points):
         len(points) + 2,
     ]
 
-    new_edges = [
-        # Triangle 1
-        (a, new_vertices_indices[0]),
-        (new_vertices_indices[0], new_vertices_indices[2]),
-        (new_vertices_indices[2], a),
-
-        # Triangle 2
-        (b, new_vertices_indices[1]),
-        (new_vertices_indices[1], new_vertices_indices[0]),
-        (new_vertices_indices[0], b),
-
-        # Triangle 3
-        (c, new_vertices_indices[2]),
-        (new_vertices_indices[2], new_vertices_indices[1]),
-        (new_vertices_indices[1], c),
-    ]
-
     new_triangles = [
         (a, new_vertices_indices[0], new_vertices_indices[2]),
         (b, new_vertices_indices[1], new_vertices_indices[0]),
         (c, new_vertices_indices[2], new_vertices_indices[1]),
     ]
 
-    return new_vertices, new_edges, new_triangles
+    return new_vertices, new_triangles
 
 
 def triangle_edges(length=2.0):
@@ -74,16 +57,23 @@ def triangle_edges(length=2.0):
     ]
     edges = [(0, 1), (1, 2), (2, 0)]
 
+    def _edges_from_triangle(triangle):
+        a, b, c = triangle
+        return [(a, b), (b, c), (c, a)]
+
     triangle = (0, 1, 2)
-    new_vertices, new_edges, new_triangles = _divide(triangle, vertices)
+    new_vertices, new_triangles = _divide(triangle, vertices)
     vertices.extend(new_vertices)
-    edges.extend(new_edges)
+    for triangle in new_triangles:
+        edges.extend(_edges_from_triangle(triangle))
 
     # For more dividing use new_triangles
     for new_triangle in new_triangles:
-        new_vertices, new_edges, _ = _divide(new_triangle, vertices)
+        new_vertices, triangles = _divide(new_triangle, vertices)
         vertices.extend(new_vertices)
-        edges.extend(new_edges)
+
+        for triangle in triangles:
+            edges.extend(_edges_from_triangle(triangle))
 
     return vertices, edges
 
@@ -99,7 +89,7 @@ def triangle_facets(length=2.0):
     ]
 
     triangle = (0, 1, 2)
-    new_vertices, _, new_triangles = _divide(triangle, vertices)
+    new_vertices, new_triangles = _divide(triangle, vertices)
     vertices.extend(new_vertices)
 
     # The facets should not be accumulated for all of them as the first
@@ -107,7 +97,7 @@ def triangle_facets(length=2.0):
     # have 'holes' where there are triangles that aren't filled.
     facets = []
     for new_triangle in new_triangles:
-        new_vertices, _, triangles = _divide(new_triangle, vertices)
+        new_vertices, triangles = _divide(new_triangle, vertices)
         vertices.extend(new_vertices)
         facets.extend(triangles)
 
