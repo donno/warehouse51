@@ -49,32 +49,14 @@ def _divide(triangle, points):
 def triangle_edges(length=2.0):
     """Generates the points and edges to form a Sierpinski triangle."""
 
-    # Starting with a equilateral triangle.
-    vertices = [
-        (0, (math.sqrt(3) / 3.0) * length, 0.0),
-        (-length / 2, -(math.sqrt(3) / 6.0) * length, 0.0),
-        (length / 2, -(math.sqrt(3) / 6.0) * length, 0.0),
-    ]
-    edges = [(0, 1), (1, 2), (2, 0)]
-
     def _edges_from_triangle(triangle):
         a, b, c = triangle
         return [(a, b), (b, c), (c, a)]
 
-    triangle = (0, 1, 2)
-    new_vertices, new_triangles = _divide(triangle, vertices)
-    vertices.extend(new_vertices)
-    for triangle in new_triangles:
-        edges.extend(_edges_from_triangle(triangle))
-
-    # For more dividing use new_triangles
-    for new_triangle in new_triangles:
-        new_vertices, triangles = _divide(new_triangle, vertices)
-        vertices.extend(new_vertices)
-
-        for triangle in triangles:
-            edges.extend(_edges_from_triangle(triangle))
-
+    vertices, facets = triangle_facets(length)
+    edges = []
+    for facet in facets:
+        edges.extend(_edges_from_triangle(facet))
     return vertices, edges
 
 
