@@ -46,21 +46,21 @@ def _divide(triangle, points):
     return new_vertices, new_triangles
 
 
-def triangle_edges(length=2.0):
+def triangle_edges(length=2.0, divisions=4)):
     """Generates the points and edges to form a Sierpinski triangle."""
 
     def _edges_from_triangle(triangle):
         a, b, c = triangle
         return [(a, b), (b, c), (c, a)]
 
-    vertices, facets = triangle_facets(length)
+    vertices, facets = triangle_facets(length, divisions)
     edges = []
     for facet in facets:
         edges.extend(_edges_from_triangle(facet))
     return vertices, edges
 
 
-def triangle_facets(length=2.0):
+def triangle_facets(length=2.0, divisions=4):
     """Generates the points and facets to form a Sierpinski triangle."""
 
     # Starting with a equilateral triangle.
@@ -70,17 +70,20 @@ def triangle_facets(length=2.0):
         (length / 2, -(math.sqrt(3) / 6.0) * length, 0.0),
     ]
 
-    triangle = (0, 1, 2)
-    new_vertices, new_triangles = _divide(triangle, vertices)
-    vertices.extend(new_vertices)
-
     # The facets should not be accumulated for all of them as the first
     # triangle will Z-fight with remaining triangles. The overall style is to
     # have 'holes' where there are triangles that aren't filled.
-    facets = []
-    for new_triangle in new_triangles:
-        new_vertices, triangles = _divide(new_triangle, vertices)
-        vertices.extend(new_vertices)
-        facets.extend(triangles)
+
+    facets = [(0, 1, 2)]
+    new_triangles = facets
+
+    for _ in range(divisions):
+        facets = []
+        for new_triangle in new_triangles:
+            next_vertices, next_triangles = _divide(new_triangle, vertices)
+            vertices.extend(next_vertices)
+            facets.extend(next_triangles)
+
+        new_triangles = facets
 
     return vertices, facets
