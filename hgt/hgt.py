@@ -84,11 +84,11 @@ def read_hgt(path: typing.Union[str, bytes, os.PathLike]):
     Details of the format are from the quick start documentation.
         https://dds.cr.usgs.gov/srtm/version2_1/Documentation/Quickstart.pdf
 
-    The filename refers to the latitude and longitude of hte lower
-    left corner of hte tile and is the geometric centre of that lower
+    The filename refers to the latitude and longitude of the lower
+    left corner of the tile and is the geometric centre of that lower
     left pixel.
 
-    The  contents of hte file are a series of signed two-byte integers in
+    The contents of the file are a series of signed two-byte integers in
     big-endian order.
 
     A cell (or pixel as mentioned above) that has no data is known as data
@@ -157,10 +157,12 @@ def read_num(path: typing.Union[str, bytes, os.PathLike]):
     for value in _read_values(path):
         yield value
 
+
 def _example():
     """A small example used for developing the module."""
     for height in read_hgt('N03W074.hgt'):
         print(height)
+
 
 if __name__ == '__main__':
     _example()
