@@ -17,11 +17,13 @@ Bring the pieces together to form the reader:
 
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright (C) 2020 Sean Donnellan"
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
+import array
 import io
 import math
 import os
+import sys
 import typing
 import zipfile
 
@@ -100,32 +102,29 @@ def read_hgt(path: typing.Union[str, bytes, os.PathLike]):
         The path to the HGT file to read.
     """
 
+    height_count = size_hgt(path) ** 2
+    # If height_count is 1201 * 1201 then data is sampled at three arc-second
+    # (~90m). This also means the file is a SRTM3 file.
+    # If height_count is 3601 * 3601 then data is sampled at one arc-second
+    # (~30m). This also means the file is a SRTM1 file.
+
     def _read_hgt_file(contents: typing.IO[bytes]):
-        while True:
-            data = contents.read(2)
-            if not data:
-                break
+        heights = array.array('h')
+        heights.fromfile(contents, height_count)
 
-            height = int.from_bytes(data, byteorder='big', signed=True)
-            yield height
-
-    height_count = size_hgt(path)
-    if height_count == 1201 * 1201:
-        # Data is sampled at three arc-second (~90m).
-        print('File is a SRTM3 file')
-    elif height_count == 3601 * 3601:
-        # Data is sampled at one arc-second (~30m).
-        print('File is a SRTM1 file')
+        if sys.byteorder == 'little':
+            heights.byteswap()
+        return heights
 
     if zipfile.is_zipfile(path):
         name = os.path.basename(os.path.splitext(path)[0]).split('_')[-1]
 
         with zipfile.ZipFile(path) as hgt_zip:
             with hgt_zip.open(name + '.hgt', 'r') as hgt_file:
-                return _read_hgt_file(io.BytesIO(hgt_file.read()))
+                return _read_hgt_file(hgt_file)
     else:
         with open(path, 'rb') as hgt_file:
-            return _read_hgt_file(io.BytesIO(hgt_file.read()))
+            return _read_hgt_file(hgt_file)
 
 
 def _read_values(path: typing.Union[str, bytes, os.PathLike]):
