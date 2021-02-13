@@ -17,7 +17,7 @@ Bring the pieces together to form the reader:
 
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright (C) 2020 Sean Donnellan"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 import io
 import math
@@ -156,6 +156,23 @@ def read_num(path: typing.Union[str, bytes, os.PathLike]):
 
     for value in _read_values(path):
         yield value
+
+
+def find_hgt_files(path: typing.Union[str, bytes, os.PathLike]):
+    """Return an iterator of HGT file(s) in the given path.
+
+    Path may be a single file in which case the iterator will provide a single
+    item to that file."""
+    use_directory = os.path.isdir(path)
+    if use_directory:
+        for entry in os.scandir(path):
+            if entry.is_file():
+                if entry.name.endswith('.hgt'):
+                    yield entry.path
+                elif entry.name.endswith('.zip') and '_HGT_' in entry.name:
+                    yield entry.path
+    else:
+        yield path
 
 
 def _example():
