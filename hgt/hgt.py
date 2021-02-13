@@ -180,6 +180,36 @@ def find_hgt_files(path: typing.Union[str, bytes, os.PathLike]):
         yield path
 
 
+def find_hgt_files_for_extent(path, extent_minimum, extent_maximum):
+    """Return list of HGT files the given path that correspond to the given
+    extent.""
+
+    path is the files containing the HGT files.
+    extent_minimum and extent_maximum are expected to be in WGS84.
+    """
+    extent_minimum = [int(math.floor(e)) for e in extent_minimum]
+    extent_maximum = [int(math.ceil(e)) for e in extent_maximum]
+    hgt_location_and_paths = [
+        (location_hgt(hgt_path, fast_zip_check=True), hgt_path)
+        for hgt_path in find_hgt_files(path)
+    ]
+
+    # latitude = northing
+    # longitude = easting
+    def _in_extent(latitude, longitude):
+        return (latitude >= extent_minimum[1] and
+            latitude < extent_maximum[1]
+            and longitude >= extent_minimum[0] and
+            longitude < extent_maximum[0]
+        )
+
+    return [
+        hgt_path
+        for (latitude, longitude), hgt_path in hgt_location_and_paths
+        if _in_extent(latitude, longitude)
+    ]
+
+
 def _example():
     """A small example used for developing the module."""
     for height in read_hgt('N03W074.hgt'):
