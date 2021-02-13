@@ -17,7 +17,7 @@ Bring the pieces together to form the reader:
 
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright (C) 2020 Sean Donnellan"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 import array
 import io
@@ -35,9 +35,15 @@ SIZE_TO_STEP = {
 }
 
 
-def location_hgt(name: str):
-    """The location as latitude and longitude based on the filename."""
-    if zipfile.is_zipfile(name):
+def location_hgt(name: str, fast_zip_check=False):
+    """The location as latitude and longitude based on the filename.
+
+    If fast_zip_check is True then this will just check the file extention
+    instead of checking the zip.
+    """
+    if not fast_zip_check and zipfile.is_zipfile(name):
+        name = os.path.basename(os.path.splitext(name)[0]).split('_')[-1]
+    elif fast_zip_check and name.endswith('.zip'):
         name = os.path.basename(os.path.splitext(name)[0]).split('_')[-1]
     elif name.endswith('.hgt'):
         name = os.path.basename(os.path.splitext(name)[0])
