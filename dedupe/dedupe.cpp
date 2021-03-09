@@ -2,10 +2,24 @@
 //
 // NAME         : dedupe
 // SUMMARY      : Removes non-critical edges from a graph.
-// COPYRIGHT    : (c) 2108 Sean Donnellan. All Rights Reserved.
+// COPYRIGHT    : (c) 2018 Sean Donnellan. All Rights Reserved.
 // LICENSE      : The MIT License (see LICENSE.txt for details)
 // DESCRIPTION: : Reports the edges that should be removed from graph as they
 //                are not along the critical path.
+//
+// The mathematical name for this is transitive reduction.
+//
+// ATTENTION:
+// Do not bother with this, bascially when I started working on it  I struggled
+// to find anything that matched what I was trying to do. After finally getting
+// this to work, I then came across tred which lead me to the keywords
+// "transitive reduction.". Tred however was not the silver bullet I was
+// looking for, as it did have a problem  (https://stackoverflow.com/a/30554721)
+// as I was seeing it taking hours and hours on my graphs. This requires
+// GraphViz 2.42 and later.
+//
+// RECOMMENDED REPLACEMENT:
+//    tred from GraphViz - transitive reduction filter for directed graphs
 //
 // It is designed for graphs which match the following criteria:
 // - Effectively a tree.
@@ -225,7 +239,7 @@ std::size_t length_first_non_trival_path(const graph_t& graph, vertex_t u,
 void find_edges_to_remove(const graph_t& graph)
 {
     // For each edge (u, v) or (source, target) in the graph:
-    // - Determine if there exists a path from u to v that doesn't invovle the
+    // - Determine if there exists a path from u to v that doesn't involve the
     // edge.
     // - If there is such a path flag the edge for removal.
 
