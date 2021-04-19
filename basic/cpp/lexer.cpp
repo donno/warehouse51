@@ -132,6 +132,7 @@ std::vector<basic::lexer::Token> basic::lexer::parse_all(
     return tokens;
 }
 
+#ifdef WITH_MAIN
 // Main
 
 #include <fstream>
@@ -170,3 +171,4 @@ int main(int argc, const char* argv[])
 
     return 0;
 }
+#endif
