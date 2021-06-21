@@ -88,7 +88,7 @@ PostfixExpression::PostfixExpression(Types ... Components)
 template<typename First, class ... Types>
 void PostfixExpression::Add(First FirstComponent, Types ... Components)
 {
-  // I think there might be a better way to do this that doesn't invole a
+  // I think there might be a better way to do this that doesn't involve a
   // recursive call using pack expansion syntax.
   Add(FirstComponent);
   Add(Components...);

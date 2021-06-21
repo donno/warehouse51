@@ -18,7 +18,7 @@ namespace
     namespace local
     {
         using variant_type = std::variant<PostfixExpression::operand_type,
-                                        PostfixExpression::operator_type>;
+                                          PostfixExpression::operator_type>;
 
         bool IsOperator(const variant_type &Item);
 
@@ -128,7 +128,7 @@ PostfixExpression::EvaluateOnce(PostfixExpression Expression)
     auto operand_2 = std::get<operand_type>(*std::prev(firstOperator, 1));
     auto operand_1 = std::get<operand_type>(*std::prev(firstOperator, 2));
 
-    // Evalutate and then replace the operator with the value
+    // Evaluate and then replace the operator with the value
     *firstOperator = local::Evaluate(operator_, operand_2, operand_1);
 
     // Remove the operands.
