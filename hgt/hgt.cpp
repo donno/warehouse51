@@ -206,13 +206,13 @@ void HGT::ForEachHeightWithIndex(
     // This tells is the number of rows and columns in the file.
     const auto size = static_cast<int>(IdentifyHgtFile(Path));
 
-    if constexpr (UseLambdaForIndex)
+    if constexpr (local::UseLambdaForIndex)
     {
         HGT::ForEachHeight(
-            pathString.c_str(),
-            [x = 0, y = 0, size, &grid](std::int16_t Height) mutable
+            Path,
+            [x = 0, y = 0, size, Function](std::int16_t Height) mutable
             {
-                grid.SetValue(x, y, Height);
+                Function(x, y, Height);
 
                 ++x;
                 if (x == size)
