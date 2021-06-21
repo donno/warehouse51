@@ -43,12 +43,12 @@ public:
   // Allows iterating forward.
   WordListIterator& operator++();
   WordListIterator& operator++(int);
-  WordListIterator& operator+=(unsigned int wordCount);
+  WordListIterator& operator+=(difference_type wordCount);
 
   // Allows iterating backwards.
   WordListIterator& operator--();
   WordListIterator& operator--(int);
-  WordListIterator& operator-=(unsigned int wordCount);
+  WordListIterator& operator-=(difference_type wordCount);
 
   // The following complement the above basics for a forard_iterator by making
   // this a random access iterator.

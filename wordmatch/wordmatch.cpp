@@ -95,7 +95,7 @@ WordListIterator& WordListIterator::operator++()
   return *this;
 }
 
-WordListIterator& WordListIterator::operator+=(unsigned int wordCount)
+WordListIterator& WordListIterator::operator+=(difference_type wordCount)
 {
   // Add the length to take into account the sorted version of the
   // word, and again for the unsorted version and then 2 characters
