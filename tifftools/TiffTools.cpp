@@ -48,12 +48,6 @@ namespace
     template<typename TYPE>
     std::optional<TYPE> NoDataValue(TIFF* Tiff);
 
-    Vector2D CellSize(TIFF* Tiff);
-
-    // Returns the lower left and upper right bounds of the image in world
-    // space.
-    std::pair<Point2D, Point2D> Bounds(TIFF* Tiff, Vector2D CellSize);
-
     // Returns the number of cells that had data.
     template<typename VALUE_TYPE>
     std::size_t WriteTileToGrid(
@@ -101,71 +95,6 @@ std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
     }
 
     return {};
-}
-
-TiffTools::Vector2D local::CellSize(TIFF* Tiff)
-{
-    int16 count;
-    double* scaleXYZ;
-    if (TIFFGetField(Tiff, GEOTIFF_MODELPIXELSCALETAG, &count, &scaleXYZ) == 1)
-    {
-        // The Z scale is almost always Z.
-        if (count >= 3 && scaleXYZ[2] != 0.0)
-        {
-            fprintf(stderr,
-                    "Warning: Encountered a non-zero Z scale value: %f\n",
-                    scaleXYZ[2]);
-        }
-
-        return Vector2D{ scaleXYZ[0], scaleXYZ[1] };
-    }
-
-    fprintf(stderr,
-            "Warning: No Pixel scale tag was present. Don't know what 1-pixel "
-            "to N-metres is.\n");
-
-    return Vector2D{1.0, 1.0};
-}
-
-std::pair<TiffTools::Point2D, TiffTools::Point2D>
-local::Bounds(TIFF* Tiff, Vector2D CellSize)
-{
-    // http://docs.opengeospatial.org/DRAFTS/geotiff.pdf
-
-    // Technically, this is going to be tie point count * 6, i.e its actually
-    // the number of values that form tie points. There are six values for
-    // each tie point.
-    int16 tiePointCount;
-    double* tiePoints;
-    if (TIFFGetField(Tiff, GEOTIFF_MODELTIEPOINTTAG, &tiePointCount,
-                     &tiePoints) != 1)
-    {
-        printf("Unable to determine the model tiepoints..\n");
-        return {};
-    }
-
-    // Assert that tiePointCount is divisible by 6.
-
-    uint32 width, height;
-    TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &width);
-    TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &height);
-
-    Point2D lowerLeft { tiePoints[3], tiePoints[4] - height * CellSize.y };
-    Point2D upperRight { tiePoints[3] + width * CellSize.x,  tiePoints[4] };
-
-    // The handling of this may be specific to the systems used by
-    // IElevationImporter. This part of the importer doesn't support if the
-    // raster pixel defines a point rather than an area (the default).
-    //
-    // This account for the difference in the points and cells and corner vs
-    // centres. Ideally, this would be checking for 6.3.1.2 Raster Type Codes
-    // from the GeoTIFF specification.
-    lowerLeft.x += CellSize.x / 2;
-    lowerLeft.y += CellSize.y / 2;
-    upperRight.x -= CellSize.x / 2;
-    upperRight.y -= CellSize.y / 2;
-
-    return { lowerLeft, upperRight };
 }
 
 template<typename VALUE_TYPE>
@@ -299,6 +228,72 @@ void TiffTools::RegisterAdditionalTiffTags()
     ParentExtender = TIFFSetTagExtender(tagExtender);
 }
 
+TiffTools::Vector2D TiffTools::CellSize(TIFF* Tiff)
+{
+    int16 count;
+    double* scaleXYZ;
+    if (TIFFGetField(Tiff, local::GEOTIFF_MODELPIXELSCALETAG, &count,
+                     &scaleXYZ) == 1)
+    {
+        // The Z scale is almost always Z.
+        if (count >= 3 && scaleXYZ[2] != 0.0)
+        {
+            fprintf(stderr,
+                    "Warning: Encountered a non-zero Z scale value: %f\n",
+                    scaleXYZ[2]);
+        }
+
+        return Vector2D{ scaleXYZ[0], scaleXYZ[1] };
+    }
+
+    fprintf(stderr,
+            "Warning: No Pixel scale tag was present. Don't know what 1-pixel "
+            "to N-metres is.\n");
+
+    return Vector2D{1.0, 1.0};
+}
+
+std::pair<TiffTools::Point2D, TiffTools::Point2D>
+TiffTools::Bounds(TIFF* Tiff, Vector2D CellSize)
+{
+    // http://docs.opengeospatial.org/DRAFTS/geotiff.pdf
+
+    // Technically, this is going to be tie point count * 6, i.e its actually
+    // the number of values that form tie points. There are six values for
+    // each tie point.
+    int16 tiePointCount;
+    double* tiePoints;
+    if (TIFFGetField(Tiff, local::GEOTIFF_MODELTIEPOINTTAG, &tiePointCount,
+                     &tiePoints) != 1)
+    {
+        printf("Unable to determine the model tiepoints..\n");
+        return {};
+    }
+
+    // Assert that tiePointCount is divisible by 6.
+
+    uint32 width, height;
+    TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &width);
+    TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &height);
+
+    Point2D lowerLeft { tiePoints[3], tiePoints[4] - height * CellSize.y };
+    Point2D upperRight { tiePoints[3] + width * CellSize.x,  tiePoints[4] };
+
+    // The handling of this may be specific to the systems used by
+    // IElevationImporter. This part of the importer doesn't support if the
+    // raster pixel defines a point rather than an area (the default).
+    //
+    // This account for the difference in the points and cells and corner vs
+    // centres. Ideally, this would be checking for 6.3.1.2 Raster Type Codes
+    // from the GeoTIFF specification.
+    lowerLeft.x += CellSize.x / 2;
+    lowerLeft.y += CellSize.y / 2;
+    upperRight.x -= CellSize.x / 2;
+    upperRight.y -= CellSize.y / 2;
+
+    return { lowerLeft, upperRight };
+}
+
 void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 {
     uint16 sampleCount;
@@ -375,8 +370,8 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
         }
     }
 
-    const auto cellSize = local::CellSize(Tiff);
-    const auto&& [lowerLeft, upperRight] = local::Bounds(Tiff, cellSize);
+    const auto cellSize = CellSize(Tiff);
+    const auto&& [lowerLeft, upperRight] = Bounds(Tiff, cellSize);
 
     tdata_t buffer = _TIFFmalloc(TIFFTileSize(Tiff));
 
@@ -469,8 +464,8 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
 {
     // Treat this as a single tile.
-    const auto cellSize = local::CellSize(Tiff);
-    const auto&& [lowerLeft, upperRight] = local::Bounds(Tiff, cellSize);
+    const auto cellSize = CellSize(Tiff);
+    const auto&& [lowerLeft, upperRight] = Bounds(Tiff, cellSize);
 
     Importer->BeginTile(lowerLeft, upperRight, cellSize);
 

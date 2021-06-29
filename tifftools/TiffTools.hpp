@@ -89,6 +89,12 @@ namespace TiffTools
   // Call this function at the start to register the GDAL + GeoTIFF tags
   // for TIFF.
 
+  // Return the size of a cell, i.e 10m by 10m, 1m by 1m or 10m by 5m.
+  Vector2D CellSize(TIFF* Tiff);
+
+  // Return the lower and upper bounds of the image in world space.
+  std::pair<Point2D, Point2D> Bounds(TIFF* Tiff, Vector2D CellSize);
+
   // Read in the tiles into the given elevation importer grid.
   void ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer);
 
