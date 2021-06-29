@@ -239,6 +239,9 @@ void local::ReadViaScanLinesInternal(
 
     tdata_t buffer = _TIFFmalloc(TIFFScanlineSize(Tiff));
 
+    auto progress = Importer->Progress();
+    if (progress) progress->Start(height);
+
     for (uint32 row = 0; row < height; ++row)
     {
         // While the documentation showed this approach, it doesn't doesn't seem to be right.
@@ -255,7 +258,10 @@ void local::ReadViaScanLinesInternal(
 
         const auto values = static_cast<VALUE_TYPE*>(buffer);
         SaveScanLine(rowFromBottom, width, values, NoDataValue, Importer);
+        if (progress) progress->StripProcessed();
     }
+
+    if (progress) progress->End();
 
     _TIFFfree(buffer);
 }
@@ -386,6 +392,9 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 
     using local::WriteTileToGrid;
 
+    auto progress = Importer->Progress();
+    if (progress) progress->Start(TIFFNumberOfTiles(Tiff));
+
     uint32 tile = 0;
     for (uint32 y = 0; y < imageLength; y += tileLength)
     {
@@ -448,8 +457,11 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 
             Importer->EndTile(x / tileWidth, y / tileLength,
                               cellsWithData == 0);
+            if (progress) progress->TileProcessed();
         }
     }
+
+    if (progress) progress->End();
 
     _TIFFfree(buffer);
 }

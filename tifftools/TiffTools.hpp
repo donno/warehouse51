@@ -24,6 +24,8 @@
 //
 //===----------------------------------------------------------------------===/
 
+#include <utility>
+
 #include <tiffio.h>
 
 namespace TiffTools
@@ -40,10 +42,32 @@ namespace TiffTools
       double y;
   };
 
+  class IProgress
+  {
+  public:
+    // This is called at the start when the number of tiles or strips is known.
+    virtual void Start(int TileOrStripCount) = 0;
+
+    // This is called when a tile has been processed, such that the progress
+    // should be incremented.
+    virtual void TileProcessed() = 0;
+
+    // This is called when a strip has been processed, such that the progress
+    // should be incremented.
+    virtual void StripProcessed() = 0;
+
+    // This is called when all the tiles/strips have been processed.
+    virtual void End() = 0;
+  };
+
   class IElevationImporter
   {
   public:
     virtual ~IElevationImporter() {};
+
+    // If your importer wishes to display progress as it is running, this may
+    // be overriden to achieve that.
+    virtual IProgress* Progress() { return nullptr; }
 
     virtual void BeginTile(Point2D LowerBound,
                            Point2D UpperBound,
