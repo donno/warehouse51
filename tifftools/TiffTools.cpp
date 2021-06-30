@@ -48,10 +48,19 @@ namespace
     template<typename TYPE>
     std::optional<TYPE> NoDataValue(TIFF* Tiff);
 
+    // Defines an axis-aligned rectangle.
+    struct Rect
+    {
+        uint32 x;
+        uint32 y;
+        uint32 width;
+        uint32 height;
+    };
+
     // Returns the number of cells that had data.
     template<typename VALUE_TYPE>
     std::size_t WriteTileToGrid(
-        uint32 X, uint32 Y, uint32 Width, uint32 Height,
+        Rect Tile,
         const VALUE_TYPE* Values,
         std::optional<VALUE_TYPE> NoDataValue,
         TiffTools::IElevationImporter* Grid);
@@ -99,7 +108,7 @@ std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
 
 template<typename VALUE_TYPE>
 std::size_t local::WriteTileToGrid(
-    uint32 X, uint32 Y, uint32 Width, uint32 Height,
+    Rect Tile,
     const VALUE_TYPE* Values,
     std::optional<VALUE_TYPE> NoDataValue,
     IElevationImporter* Grid)
@@ -107,18 +116,18 @@ std::size_t local::WriteTileToGrid(
     // row and column are within the buffer (values) and x and y are in the
     // grid.
     uint32 withDataCount = 0;
-    for (uint32 row = 0; row < Height; ++row)
+    for (uint32 row = 0; row < Tile.height; ++row)
     {
-        for (uint32 column = 0; column < Width; ++column, ++Values)
+        for (uint32 column = 0; column < Tile.width; ++column, ++Values)
         {
             if (!NoDataValue || *Values != *NoDataValue)
             {
-                Grid->SetValue(X + column, Height - (Y + row) - 1, *Values);
+                Grid->SetValue(Tile.x + column, Tile.height - (Tile.y + row) - 1, *Values);
                 ++withDataCount;
             }
             else
             {
-                Grid->FlagNoData(X + column, Height - (Y + row) - 1);
+                Grid->FlagNoData(Tile.x + column, Tile.height - (Tile.y + row) - 1);
             }
         }
     }
@@ -390,6 +399,8 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
     auto progress = Importer->Progress();
     if (progress) progress->Start(TIFFNumberOfTiles(Tiff));
 
+    const local::Rect tileExtent = { 0, 0, tileLength, tileWidth };
+
     uint32 tile = 0;
     for (uint32 y = 0; y < imageLength; y += tileLength)
     {
@@ -413,8 +424,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 // 16-bit.
                 auto values = static_cast<int16*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    0, 0, tileLength, tileWidth, values, noDataValueInt,
-                    Importer);
+                    tileExtent, values, noDataValueInt, Importer);
             }
             else if (sampleFormat == SAMPLEFORMAT_UINT && bitsPerSample == 16)
             {
@@ -422,8 +432,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 // and 16-bit.
                 auto values = static_cast<uint16*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    0, 0, tileLength, tileWidth, values,
-                    noDataValueUnsignedInt, Importer);
+                    tileExtent, values, noDataValueUnsignedInt, Importer);
             }
             else if (sampleFormat == SAMPLEFORMAT_IEEEFP && bitsPerSample == 32)
             {
@@ -431,8 +440,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 // 32-bits.
                 auto values = static_cast<float*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    0, 0, tileLength, tileWidth, values, noDataValueFloat,
-                    Importer);
+                    tileExtent, values, noDataValueFloat, Importer);
             }
             else if (sampleFormat == SAMPLEFORMAT_IEEEFP && bitsPerSample == 64)
             {
@@ -440,8 +448,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 // 64-bits.
                 auto values = static_cast<double*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    0, 0, tileLength, tileWidth, values, noDataValueDouble,
-                    Importer);
+                    tileExtent, values, noDataValueDouble, Importer);
             }
             else
             {
