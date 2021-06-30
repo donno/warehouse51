@@ -57,6 +57,25 @@ namespace
         uint32 height;
     };
 
+    struct TiledMetadata
+    {
+        uint32 imageWidth;
+        uint32 imageLength;
+        uint32 tileWidth;
+        uint32 tileLength;
+        uint16 sampleFormat;
+        uint16 bitsPerSample;
+
+        // Return true if the file is the given format and given size.
+        bool Is(uint16 SampleFormat, uint16 BitsPerSample) const;
+
+        // Handle the optional no-data fields.
+        std::optional<float> noDataValueFloat;
+        std::optional<double> noDataValueDouble;
+        std::optional<int16> noDataValueInt;
+        std::optional<uint16> noDataValueUnsignedInt;
+    };
+
     // Returns the number of cells that had data.
     template<typename VALUE_TYPE>
     std::size_t WriteTileToGrid(
@@ -77,6 +96,9 @@ namespace
         TIFF* Tiff,
         std::optional<VALUE_TYPE> NoDataValue,
         IElevationImporter* Importer);
+
+    // Read the information needed from a TIFF for processing a tiled TIFF.
+    TiledMetadata ReadTiledMetadata(TIFF* Tiff);
   }
 }
 
@@ -104,6 +126,11 @@ std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
     }
 
     return {};
+}
+
+bool local::TiledMetadata::Is(uint16 SampleFormat, uint16 BitsPerSample) const
+{
+    return sampleFormat == SampleFormat && bitsPerSample == BitsPerSample;
 }
 
 template<typename VALUE_TYPE>
@@ -202,6 +229,73 @@ void local::ReadViaScanLinesInternal(
     if (progress) progress->End();
 
     _TIFFfree(buffer);
+}
+
+local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
+{
+    TiledMetadata metadata;
+    TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &metadata.imageWidth);
+    TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &metadata.imageLength);
+    TIFFGetField(Tiff, TIFFTAG_TILEWIDTH, &metadata.tileWidth);
+    TIFFGetField(Tiff, TIFFTAG_TILELENGTH, &metadata.tileLength);
+    TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &metadata.bitsPerSample);
+    TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &metadata.sampleFormat);
+
+    const auto bitsPerSample = metadata.bitsPerSample;
+
+    std::optional<float> noDataValueFloat;
+    std::optional<double> noDataValueDouble;
+    std::optional<int16> noDataValueInt;
+    std::optional<uint16> noDataValueUnsignedInt;
+    if (metadata.sampleFormat == SAMPLEFORMAT_IEEEFP)
+    {
+        printf("Samples are in IEEE floating point format with %d bits per "
+               "sample.\n", bitsPerSample);
+        if (bitsPerSample == 32)
+        {
+            noDataValueFloat = local::NoDataValue<float>(Tiff);
+        }
+        else if (bitsPerSample == 64)
+        {
+            noDataValueDouble = local::NoDataValue<double>(Tiff);
+        }
+        else
+        {
+            fprintf(stderr,
+                    "Expected 32-bits/64-bit per sample (32-bit/64-bit IEEE "
+                    "float) got %d bits per sample.\n", bitsPerSample);
+        }
+    }
+    else if (metadata.sampleFormat == SAMPLEFORMAT_INT)
+    {
+        printf("Samples are signed integer.\n");
+        if (bitsPerSample == 16)
+        {
+            noDataValueInt = local::NoDataValue<int16>(Tiff);
+        }
+        else
+        {
+            fprintf(stderr,
+                    "Expected 16-bits per sample (16-bit signed integer) got "
+                    "%d bits per sample.\n", bitsPerSample);
+        }
+    }
+    else if (metadata.sampleFormat == SAMPLEFORMAT_UINT)
+    {
+        printf("Samples are signed integer.\n");
+        if (bitsPerSample == 16)
+        {
+            noDataValueInt = local::NoDataValue<uint16>(Tiff);
+        }
+        else
+        {
+            fprintf(stderr,
+                    "Expected 16-bits per sample (16-bit signed integer) got "
+                    "%d bits per sample.\n", bitsPerSample);
+        }
+    }
+
+    return metadata;
 }
 
 void TiffTools::RegisterAdditionalTiffTags()
@@ -315,70 +409,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 "expected.\n", sampleCount);
     }
 
-    uint16 bitsPerSample;
-    TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &bitsPerSample);
-
-    uint32 imageWidth, imageLength;
-    uint32 tileWidth, tileLength;
-    TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &imageWidth);
-    TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &imageLength);
-    TIFFGetField(Tiff, TIFFTAG_TILEWIDTH, &tileWidth);
-    TIFFGetField(Tiff, TIFFTAG_TILELENGTH, &tileLength);
-
-    uint16 sampleFormat;
-    TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &sampleFormat);
-    std::optional<float> noDataValueFloat;
-    std::optional<double> noDataValueDouble;
-    std::optional<int16> noDataValueInt;
-    std::optional<uint16> noDataValueUnsignedInt;
-    if (sampleFormat == SAMPLEFORMAT_IEEEFP)
-    {
-        printf("Samples are in IEEE floating point format with %d bits per "
-               "sample.\n", bitsPerSample);
-        if (bitsPerSample == 32)
-        {
-            noDataValueFloat = local::NoDataValue<float>(Tiff);
-        }
-        else if (bitsPerSample == 64)
-        {
-            noDataValueDouble = local::NoDataValue<double>(Tiff);
-        }
-        else
-        {
-            fprintf(stderr,
-                    "Expected 32-bits/64-bit per sample (32-bit/64-bit IEEE "
-                    "float) got %d bits per sample.\n", bitsPerSample);
-        }
-    }
-    else if (sampleFormat == SAMPLEFORMAT_INT)
-    {
-        printf("Samples are signed integer.\n");
-        if (bitsPerSample == 16)
-        {
-            noDataValueInt = local::NoDataValue<int16>(Tiff);
-        }
-        else
-        {
-            fprintf(stderr,
-                    "Expected 16-bits per sample (16-bit signed integer) got "
-                    "%d bits per sample.\n", bitsPerSample);
-        }
-    }
-    else if (sampleFormat == SAMPLEFORMAT_UINT)
-    {
-        printf("Samples are signed integer.\n");
-        if (bitsPerSample == 16)
-        {
-            noDataValueInt = local::NoDataValue<uint16>(Tiff);
-        }
-        else
-        {
-            fprintf(stderr,
-                    "Expected 16-bits per sample (16-bit signed integer) got "
-                    "%d bits per sample.\n", bitsPerSample);
-        }
-    }
-
+    const local::TiledMetadata metadata = local::ReadTiledMetadata(Tiff);
     const auto cellSize = CellSize(Tiff);
     const auto&& [lowerLeft, upperRight] = Bounds(Tiff, cellSize);
 
@@ -399,7 +430,13 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
     auto progress = Importer->Progress();
     if (progress) progress->Start(TIFFNumberOfTiles(Tiff));
 
-    const local::Rect tileExtent = { 0, 0, tileLength, tileWidth };
+    const local::Rect tileExtent =
+        { 0, 0, metadata.tileLength, metadata.tileWidth };
+
+    const auto imageLength = metadata.imageLength;
+    const auto imageWidth = metadata.imageWidth;
+    const auto tileLength = metadata.tileLength;
+    const auto tileWidth = metadata.tileWidth;
 
     uint32 tile = 0;
     for (uint32 y = 0; y < imageLength; y += tileLength)
@@ -418,43 +455,44 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 cellSize);
 
             std::size_t cellsWithData = 0;
-            if (sampleFormat == SAMPLEFORMAT_INT && bitsPerSample == 16)
+            if (metadata.Is(SAMPLEFORMAT_INT, 16))
             {
                 // This is valid when the sample format is SAMPLEFORMAT_INT and
                 // 16-bit.
                 auto values = static_cast<int16*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    tileExtent, values, noDataValueInt, Importer);
+                    tileExtent, values, metadata.noDataValueInt, Importer);
             }
-            else if (sampleFormat == SAMPLEFORMAT_UINT && bitsPerSample == 16)
+            else if (metadata.Is(SAMPLEFORMAT_UINT, 16))
             {
                 // This is valid when the sample format is SAMPLEFORMAT_UINT
                 // and 16-bit.
                 auto values = static_cast<uint16*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    tileExtent, values, noDataValueUnsignedInt, Importer);
+                    tileExtent, values, metadata.noDataValueUnsignedInt,
+                    Importer);
             }
-            else if (sampleFormat == SAMPLEFORMAT_IEEEFP && bitsPerSample == 32)
+            else if (metadata.Is(SAMPLEFORMAT_IEEEFP, 32))
             {
                 // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
                 // 32-bits.
                 auto values = static_cast<float*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    tileExtent, values, noDataValueFloat, Importer);
+                    tileExtent, values, metadata.noDataValueFloat, Importer);
             }
-            else if (sampleFormat == SAMPLEFORMAT_IEEEFP && bitsPerSample == 64)
+            else if (metadata.Is(SAMPLEFORMAT_IEEEFP, 64))
             {
                 // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
                 // 64-bits.
                 auto values = static_cast<double*>(buffer);
                 cellsWithData = WriteTileToGrid(
-                    tileExtent, values, noDataValueDouble, Importer);
+                    tileExtent, values, metadata.noDataValueDouble, Importer);
             }
             else
             {
                 fprintf(stderr,
                         "Unable to read/write this type of data (%d bits).\n",
-                        bitsPerSample);
+                        metadata.bitsPerSample);
             }
 
             Importer->EndTile(x / tileWidth, y / tileLength,
