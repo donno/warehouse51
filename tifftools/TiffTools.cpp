@@ -66,6 +66,8 @@ namespace
         uint16 sampleFormat;
         uint16 bitsPerSample;
 
+        Vector2D cellSize;
+
         // Return true if the file is the given format and given size.
         bool Is(uint16 SampleFormat, uint16 BitsPerSample) const;
 
@@ -98,7 +100,16 @@ namespace
         IElevationImporter* Importer);
 
     // Read the information needed from a TIFF for processing a tiled TIFF.
+    // This reports warnings and errors to standard error.
     TiledMetadata ReadTiledMetadata(TIFF* Tiff);
+
+    void ReadTile(
+        TIFF* Tiff,
+        const TiledMetadata& MetaData,
+        TiffTools::Point2D LowerLeft,
+        tdata_t Buffer,
+        uint32 X, uint32 Y,
+        IElevationImporter* Importer);
   }
 }
 
@@ -241,6 +252,8 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
     TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &metadata.bitsPerSample);
     TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &metadata.sampleFormat);
 
+    metadata.cellSize = TiffTools::CellSize(Tiff);
+
     const auto bitsPerSample = metadata.bitsPerSample;
 
     std::optional<float> noDataValueFloat;
@@ -296,6 +309,92 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
     }
 
     return metadata;
+}
+
+void local::ReadTile(
+    TIFF* Tiff,
+    const TiledMetadata& Metadata,
+    TiffTools::Point2D LowerLeft,
+    tdata_t Buffer,
+    uint32 X, uint32 Y,
+    IElevationImporter* Importer)
+{
+    const auto& cellSize = Metadata.cellSize;
+
+    TIFFReadTile(Tiff, Buffer, X, Metadata.imageLength - Y - 1, 0, tsample_t{0});
+
+    // Create a grid just for this tile and then write the data into it.
+    Importer->BeginTile(
+        Point2D{ LowerLeft.x + X * cellSize.x,
+                 LowerLeft.y + Y * cellSize.y },
+        Point2D{ LowerLeft.x + (X + Metadata.tileWidth -1) * cellSize.x,
+                 LowerLeft.y + (Y + Metadata.tileLength - 1) * cellSize.y },
+        cellSize);
+
+    const auto trueTileDimension = [](uint32 Start, uint32 End, uint32 Stride)
+    {
+         if (Start + Stride > End)
+         {
+             return End - Start;
+         }
+
+        return Stride;
+    };
+
+    const local::Rect tileExtent =
+        { 0, 0, Metadata.tileLength, Metadata.tileWidth };
+
+    // Determine the max width and height to read to. If the image is
+    // not an exact multiple of the tile size then remaining tile will
+    // be smaller however it be zero-filled outside of the tile area.
+    const auto validWidth = trueTileDimension(
+        X, Metadata.imageWidth, Metadata.tileWidth);
+    const auto validLength = trueTileDimension(
+        Y, Metadata.imageLength, Metadata.tileLength);
+
+    std::size_t cellsWithData = 0;
+    if (Metadata.Is(SAMPLEFORMAT_INT, 16))
+    {
+        // This is valid when the sample format is SAMPLEFORMAT_INT and
+        // 16-bit.
+        auto values = static_cast<int16*>(Buffer);
+        cellsWithData = WriteTileToGrid(
+            tileExtent, values, Metadata.noDataValueInt, Importer);
+    }
+    else if (Metadata.Is(SAMPLEFORMAT_UINT, 16))
+    {
+        // This is valid when the sample format is SAMPLEFORMAT_UINT
+        // and 16-bit.
+        auto values = static_cast<uint16*>(Buffer);
+        cellsWithData = WriteTileToGrid(
+            tileExtent, values, Metadata.noDataValueUnsignedInt,
+            Importer);
+    }
+    else if (Metadata.Is(SAMPLEFORMAT_IEEEFP, 32))
+    {
+        // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
+        // 32-bits.
+        auto values = static_cast<float*>(Buffer);
+        cellsWithData = WriteTileToGrid(
+            tileExtent, values, Metadata.noDataValueFloat, Importer);
+    }
+    else if (Metadata.Is(SAMPLEFORMAT_IEEEFP, 64))
+    {
+        // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
+        // 64-bits.
+        auto values = static_cast<double*>(Buffer);
+        cellsWithData = WriteTileToGrid(
+            tileExtent, values, Metadata.noDataValueDouble, Importer);
+    }
+    else
+    {
+        fprintf(stderr,
+                "Unable to read/write this type of data (%d bits).\n",
+                Metadata.bitsPerSample);
+    }
+    Importer->EndTile(X / Metadata.tileWidth,
+                      Y / Metadata.tileLength,
+                      cellsWithData == 0);
 }
 
 void TiffTools::RegisterAdditionalTiffTags()
@@ -410,8 +509,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
     }
 
     const local::TiledMetadata metadata = local::ReadTiledMetadata(Tiff);
-    const auto cellSize = CellSize(Tiff);
-    const auto&& [lowerLeft, upperRight] = Bounds(Tiff, cellSize);
+    const auto&& [lowerLeft, upperRight] = Bounds(Tiff, metadata.cellSize);
 
     tdata_t buffer = _TIFFmalloc(TIFFTileSize(Tiff));
 
@@ -423,80 +521,14 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
                 orientation);
     }
 
-    // TODO: orientation isn't being used here.
-
-    using local::WriteTileToGrid;
-
     auto progress = Importer->Progress();
     if (progress) progress->Start(TIFFNumberOfTiles(Tiff));
 
-    const local::Rect tileExtent =
-        { 0, 0, metadata.tileLength, metadata.tileWidth };
-
-    const auto imageLength = metadata.imageLength;
-    const auto imageWidth = metadata.imageWidth;
-    const auto tileLength = metadata.tileLength;
-    const auto tileWidth = metadata.tileWidth;
-
-    uint32 tile = 0;
-    for (uint32 y = 0; y < imageLength; y += tileLength)
+    for (uint32 y = 0; y < metadata.imageLength; y += metadata.tileLength)
     {
-        for (uint32 x = 0; x < imageWidth; x += tileWidth)
+        for (uint32 x = 0; x < metadata.imageWidth; x += metadata.tileWidth)
         {
-            TIFFReadTile(Tiff, buffer, x, imageLength - y - 1, 0, tsample_t{0});
-            ++tile;
-
-            // Create a grid just for this tile and then write the data into it.
-            Importer->BeginTile(
-                Point2D{ lowerLeft.x + x * cellSize.x,
-                            lowerLeft.y + y * cellSize.y },
-                Point2D{ lowerLeft.x + (x + tileWidth -1) * cellSize.x,
-                            lowerLeft.y + (y + tileLength - 1) * cellSize.y },
-                cellSize);
-
-            std::size_t cellsWithData = 0;
-            if (metadata.Is(SAMPLEFORMAT_INT, 16))
-            {
-                // This is valid when the sample format is SAMPLEFORMAT_INT and
-                // 16-bit.
-                auto values = static_cast<int16*>(buffer);
-                cellsWithData = WriteTileToGrid(
-                    tileExtent, values, metadata.noDataValueInt, Importer);
-            }
-            else if (metadata.Is(SAMPLEFORMAT_UINT, 16))
-            {
-                // This is valid when the sample format is SAMPLEFORMAT_UINT
-                // and 16-bit.
-                auto values = static_cast<uint16*>(buffer);
-                cellsWithData = WriteTileToGrid(
-                    tileExtent, values, metadata.noDataValueUnsignedInt,
-                    Importer);
-            }
-            else if (metadata.Is(SAMPLEFORMAT_IEEEFP, 32))
-            {
-                // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
-                // 32-bits.
-                auto values = static_cast<float*>(buffer);
-                cellsWithData = WriteTileToGrid(
-                    tileExtent, values, metadata.noDataValueFloat, Importer);
-            }
-            else if (metadata.Is(SAMPLEFORMAT_IEEEFP, 64))
-            {
-                // This is valid when sample format is SAMPLEFORMAT_IEEEFP and
-                // 64-bits.
-                auto values = static_cast<double*>(buffer);
-                cellsWithData = WriteTileToGrid(
-                    tileExtent, values, metadata.noDataValueDouble, Importer);
-            }
-            else
-            {
-                fprintf(stderr,
-                        "Unable to read/write this type of data (%d bits).\n",
-                        metadata.bitsPerSample);
-            }
-
-            Importer->EndTile(x / tileWidth, y / tileLength,
-                              cellsWithData == 0);
+            local::ReadTile(Tiff, metadata, lowerLeft, buffer, x, y, Importer);
             if (progress) progress->TileProcessed();
         }
     }
