@@ -13,10 +13,10 @@
 #include "tiffio.h"
 
 #include <charconv>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <optional>
-#include <string>
 
 namespace
 {
@@ -81,7 +81,7 @@ std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
         // The tag exists now parse it.
         TYPE value;
         if (auto [source, errorCode] = std::from_chars(
-                stringValue, stringValue + strlen(stringValue), value);
+                stringValue, stringValue + std::strlen(stringValue), value);
             errorCode == std::errc())
         {
             return std::make_optional(value);
