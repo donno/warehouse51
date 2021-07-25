@@ -1,6 +1,5 @@
 """Creates a progress dialog using the Windows API."""
 
-# TODO: Handle resizing the dialog.
 # TODO: Add support for having a message (label)
 # TODO: Add support for making it cancellable.
 
@@ -49,10 +48,22 @@ class ProgressDialog:
         """Step the progress indicator forward."""
         win32gui.SendMessage(self.progress, commctrl.PBM_STEPIT, 0, 0)
 
+    def complete(self):
+        """Flag the progress as being complete - closes the dialog."""
+        win32gui.DestroyWindow(self.window_handle)
+        win32gui.PumpMessages()
+
     @classmethod
     def _create_window(cls, title):
         def _on_destroy(hwnd, msg, wparam, lparam):
             win32gui.PostQuitMessage(0)
+            return True
+
+        def _on_resized(hwnd, msg, wparam, lparam):
+            l,t,r,b = win32gui.GetClientRect(hwnd)
+            progress = win32gui.FindWindowEx(
+                hwnd, None, commctrl.PROGRESS_CLASS, "")
+            win32gui.SetWindowPos(progress, None, l, t, r, b, 0)
             return True
 
         win32gui.InitCommonControls()
@@ -62,6 +73,7 @@ class ProgressDialog:
         className = 'MyWndClass'
         message_map = {
             win32con.WM_DESTROY: _on_destroy,
+            win32con.WM_EXITSIZEMOVE: _on_resized,
         }
         wc = win32gui.WNDCLASS()
         wc.style = win32con.CS_HREDRAW | win32con.CS_VREDRAW
@@ -108,3 +120,4 @@ if __name__ == '__main__':
         progress.step()
         win32api.Sleep(100)
         win32gui.PumpWaitingMessages()
+    progress.complete()
