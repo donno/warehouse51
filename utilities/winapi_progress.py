@@ -47,6 +47,7 @@ class ProgressDialog:
     def step(self):
         """Step the progress indicator forward."""
         win32gui.SendMessage(self.progress, commctrl.PBM_STEPIT, 0, 0)
+        win32gui.PumpWaitingMessages()
 
     def complete(self):
         """Flag the progress as being complete - closes the dialog."""
@@ -117,7 +118,6 @@ if __name__ == '__main__':
     progress = ProgressDialog(title='Example')
     progress.set_iterator_count(100)
     for _ in range(100):
-        progress.step()
         win32api.Sleep(100)
-        win32gui.PumpWaitingMessages()
+        progress.step()
     progress.complete()
