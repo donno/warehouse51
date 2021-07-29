@@ -16,6 +16,7 @@ data is 3190, which also includes the size at the start.
 """
 
 import io
+import palette
 
 from PIL import Image
 
@@ -49,6 +50,41 @@ class LevelHeader:
     def size(self):
         """Return the (width, height) of the level."""
         return self.width, self.height
+
+
+class WallTexture:
+    """The textures on the walls are naturally represented as 64 by 64 array
+    of colour indices. These indices refer to a colour in the colour palette.
+
+    For Wolf3D, the colour palette was compiled into the executable rather than
+    being a separate file. An approximation for this colour palette is provided
+    in the palette module.
+    """
+
+    WIDTH = 64
+    HEIGHT = 64
+
+    def __init__(self, colour_indices):
+        self.colour_indices = colour_indices
+
+    def as_rgb(self):
+        return [
+            colour_for_index(index)
+            for index in self.colour_indices
+        ]
+
+
+def colour_for_index(colour_index):
+    """Return the colour for the given index in the palette.
+
+    This accounts for palette.COLOURS being a flat array of
+        [red, green, blue, red, green, blue, ...]
+    """
+    offset = colour_index * 3
+    red = palette.COLOURS[offset]
+    green = palette.COLOURS[offset + 1]
+    blue = palette.COLOURS[offset + 2]
+    return red, green, blue
 
 
 def map_headers(reader):
@@ -305,7 +341,7 @@ def read_video_swap(reader):
     };
 
     The SpriteStart and SoundStart are the indices in the chunks.
-    The chunks are: [walls, spirtes, sounds]
+    The chunks are: [walls, sprites, sounds]
     """
     chunk_count = int.from_bytes(
         reader.read(2), byteorder='little', signed=False)
@@ -330,11 +366,15 @@ def read_video_swap(reader):
     #     print('Wall' if index < sprite_start else
     #           ('Sprite' if index  < sound_start else 'Sound'))
 
-    # wall_chunks = chunks[:sprite_start]
-    # for offset, length in wall_chunks:
-    #     reader.seek(offset)
-    #     wall_raw = reader.read(length)
+    walls = []
 
+    wall_chunks = chunks[:sprite_start]
+    for offset, length in wall_chunks:
+        reader.seek(offset)
+        wall_raw = reader.read(length)
+        walls.append(WallTexture(wall_raw))
+
+    sprites = []
     sprite_chunks = chunks[sprite_start:sound_start]
     for offset, length in sprite_chunks:
         reader.seek(offset)
@@ -354,6 +394,8 @@ def read_video_swap(reader):
 
         # TODO: This is incomplete.
 
+    sounds = []
+    return walls, sprites, sounds
 
 def main():
     with open('MAPHEAD.WL6', 'rb') as reader:
@@ -362,7 +404,18 @@ def main():
     print('Level count: %s' % sum(1 for level in level_offsets if level > 0))
 
     with open('VSWAP.WL6', 'rb') as reader:
-        read_video_swap(reader)
+        walls, sprites, sounds = read_video_swap(reader)
+
+    # Save out the wall textures to individual PNG files.
+    #
+    # It might actually be possible for Pillow to handle this via its
+    # ImagePalette option.
+    for i, wall in enumerate(walls):
+        wall_image = Image.new('RGB', (64, 64))
+        # Pillow starts at upper left as (0, 0) where the data is bottom left.
+        wall_image.putdata(wall.as_rgb())
+        wall_image= wall_image.transpose(Image.ROTATE_270)
+        wall_image.save('wolf3d_wall_%d.png' % i)
 
     with open('GAMEMAPS.WL6', 'rb') as f:
         magic = f.read(8)
