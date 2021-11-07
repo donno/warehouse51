@@ -7,7 +7,7 @@ by a machine.
 
 Additionally there is numbertarget which is a game for the
 (LOVE)[https://love2d.org/] engine. This is an interactive version of the
-game that I wrote back in 2013-2014.
+game that I wrote back in 2013-2014 and a web based version from 2015.
 
 Game rules
 ---------------------
@@ -53,6 +53,8 @@ in 125.
 
 numbertarget
 ------------
+
+### Love
 To play, drop the numbertarget folder onto love.exe, or run `love numbertarget`
 on other platforms.
 
@@ -61,6 +63,9 @@ which is then self-contained.
 
 The font file LeagueGothic.otf is licenced under Open Font License and the
 copyright is held by The League of Moveable Type (2009-2011).
+
+### Web
+To play, open numbertarget.html in a web browser.
 
 Authors
 ---------

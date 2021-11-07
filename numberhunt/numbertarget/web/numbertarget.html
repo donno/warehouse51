@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Number Target</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet">
+    <link href="cover.css" rel="stylesheet">
+  </head>
+  <body>
+    <div class="site-wrapper">
+      <div class="site-wrapper-inner">
+        <div class="cover-container">
+          <div class="masthead clearfix">
+            <div class="inner">
+              <h3 class="masthead-brand">Number Target</h3>
+              <nav>
+                <ul class="nav masthead-nav">
+                  <li class="active"><a href="#">Play</a></li>
+                  <li><a href="#" onclick="Restart();">Restart</a></li>
+                  <li><a href="#">About</a></li>
+                </ul>
+              </nav>
+            </div>
+            <br>            
+            <!--div id="how-to-play">
+              <h4>How to play</h4>
+              <span>
+                <ol>
+                  <li>Choose a selection of numbers.
+                      <br>The actual numbers are random and come from two groups.
+                      <br>Smalls which will be a number 1-10 and bigs which can be 25, 50, 75 and 100.
+                  <li>A random number will be chosen which is your <em>target number</em>
+                  <li>Using the numbers you selected in step one, you try to add, subtract, divide and multiple them to get to the target number. A division must be an integer (whole number)/without a remainder.  
+              </span>
+            </div-->
+          </div>
+
+          <div class="cover">
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <h3 class="panel-title cover-heading" id="state-title">Choose a groupings of numbers</h3>
+              </div>
+              <div class="panel-body">
+                <div id="selection" class="btn-group btn-group-lg btn-group-vertical" role="group" aria-label="groupings">
+                  <button type="button" class="btn btn-default" onclick="NumberSelection(4);">Four large, two smalls</button>
+                  <button type="button" class="btn btn-default" onclick="NumberSelection(3);">Three large, three smalls</button>
+                  <button type="button" class="btn btn-default" onclick="NumberSelection(2);">Two larges, four smalls</button>
+                  <button type="button" class="btn btn-default" onclick="NumberSelection(1);">One larges, five smalls</button>
+                  <button type="button" class="btn btn-default" onclick="NumberSelection(0);">Six smalls</button>
+                </div>
+                <div id="numbers">
+                </div>
+              </div>
+              <div class="panel-footer">
+                <div class="progress">
+                  <div class="progress-bar" role="progressbar" id="clock" aria-valuenow="0" aria-valuemin="0" aria-valuemax="30" style="width: 0%;">
+                    <span class="sr-only">The game has not been started</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mastfoot">
+            <div class="inner">
+              <p>
+                Unique content by <a href="https://github.com/donno/">Donno</a>.
+                Game idea from the British game called Countdown.  
+                Page design powered by <a href="http://getbootstrap.com">Bootstrap</a> and template by <a href="https://twitter.com/mdo">@mdo</a>.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+    <script>
+      
+      var game = {
+        "numbers": [],       
+        "timer": null,
+        "time": null
+      };
+
+      // Game play logic.
+      function NumberSelection(largeCount)
+      {
+        if (largeCount > 4 || largeCount < 0)
+        {
+          // Error
+          return;
+        }
+        
+        var largeNumbers  = [25, 50, 75, 100];
+        var numbers = [];
+
+        for (var i = 0; i < largeCount; ++i)
+        {
+          var chosenNumberIndex = Math.floor(Math.random() * largeNumbers.length);
+          numbers.push(largeNumbers[chosenNumberIndex]);
+          largeNumbers.splice(chosenNumberIndex, 1);
+        }
+        
+        for (var i = numbers.length; i < 6; ++i)
+        {
+          numbers.push(Math.floor(Math.random() * 10 + 1));
+        }
+
+        numbers.sort(function(lhs, rhs) { return lhs - rhs; });
+        
+        var buttonHtml = "<button type=\"button\" class=\"btn btn-default\" onclick=\"Use(this);\">";
+        $("#state-title").html("Your numbers are");
+        $("#selection").hide();
+        $("#numbers").html(
+          "<div>" +
+          buttonHtml + numbers.join(buttonHtml) + 
+          "</div><br><button type=\"button\" class=\"btn btn-default\" onclick=\"Start(this);\">Start</button>");
+
+        game.numbers = numbers;
+      }
+      
+      function Tick()
+      {
+        game.time += 1;
+        $('#clock').css('width', (100 * game.time / 30.0) +'%').attr('aria-valuenow', game.time);
+      }
+
+      function Start(field)
+      {
+        game.target = Math.floor(Math.random() * 900 + 100);
+        $("#state-title").html("Target is : " + game.target);
+        $("#numbers").prepend("<h1>" + game.target + "</h1><br>");
+        field.remove();
+
+        game.time = 0;
+        game.timer = window.setInterval(Tick, 1000);
+      }
+      
+      function Restart()
+      {
+        game.time = null;
+        game.numbers = [];
+        if (game.timer)
+        {
+          clearInterval(game.timer);
+          game.timer = null;
+        }
+
+        $('#clock').css('width', '0%').attr('aria-valuenow', 0);
+        $("#numbers").html("");
+        $("#selection").show();
+        $("#state-title").html("Choose a groupings of numbers");
+      }
+      function Use(field)
+      {
+        console.log("Using [" + field.innerHTML + "]");
+      }
+
+    </script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+  </body>
+</html>
