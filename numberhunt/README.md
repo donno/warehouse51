@@ -5,6 +5,10 @@ British TV program "Countdown". It is also intended to provide an interactive
 environment where the game can be played with the intention that it is played
 by a machine.
 
+Additionally there is numbertarget which is a game for the
+(LOVE)[https://love2d.org/] engine. This is an interactive version of the
+game that I wrote back in 2013-2014.
+
 Game rules
 ---------------------
 
@@ -28,7 +32,7 @@ How it works
 
 The solver is essentially brute-force and runs through all the combinations
 of actions which is using up to six numbers and applying the operations to
-them. 
+them.
 
 It presents the expression in postifx notation. The final result could be
 converted to inflex notation.
@@ -46,6 +50,17 @@ at least two numbers at the start as all operators are binary so need to
 arguments (the two numbers). The third choice does not need to be a operator
 as you can choose 100, 25, 5  then do * resulting in 125 and then + resulting
 in 125.
+
+numbertarget
+------------
+To play, drop the numbertarget folder onto love.exe, or run `love numbertarget`
+on other platforms.
+
+The contents of the folder can be zipped to create a numbertarget.love file
+which is then self-contained.
+
+The font file LeagueGothic.otf is licenced under Open Font License and the
+copyright is held by The League of Moveable Type (2009-2011).
 
 Authors
 ---------
