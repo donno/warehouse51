@@ -11,7 +11,7 @@ There are two parts
 * Finding the solutions using the word list.
 
 The optimised part, groups each word of a certain length into a separate file.
-The first 4-bytes of the file stores the length of the words in the file.
+The first 8-bytes of the file stores the length of the words in the file.
 Then the words are stored as <sortedWord><word>\0\n so for example the word
 "carrot" is stored as "acorrtcarrot\0\n". Each word appears in sorted order in
 the file to allow for binary searching of a given sequence of letters.

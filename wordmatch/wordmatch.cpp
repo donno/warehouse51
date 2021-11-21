@@ -342,7 +342,7 @@ std::string Combination::current() const
 
 bool Combination::next() const
 {
-  // The algorithm is as follows, each charachter is assigned a number
+  // The algorithm is as follows, each character is assigned a number
   // based on its index in the word. So "acdgot" is 012345, then it runs through
   // all the permutations of those numbers, and take first 3 numbers to form
   // a new word. It ignores it if the numbers aren't sorted i.e (1 0 2) since
