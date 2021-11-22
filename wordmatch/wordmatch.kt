@@ -13,6 +13,13 @@
     To compile run the following from the parent folder due to it being in
     a package and the package needs to match the folder name.
     kotlinc -include-runtime wordmatch/wordmatch.kt -d wordmatch\wordmatch.jar
+
+    Currently the wordlist can be embeded into the jar under wordmatch/data,
+    at this time it is added after the fact to the jar manually.Files
+
+    To prepare the data use getdata.py then use the C++ implementation's
+    --generate option to convert from the plain text word list into the native
+    data structures.
  */
 
 package wordmatch
@@ -47,7 +54,17 @@ class WordList {
     private val length: Long
 
     constructor(source: Path) {
-        val content = Files.readAllBytes(source)
+        val resource = this::class.java.getResource(
+            source.toString().replace("\\", "/"))
+
+        val content = if (resource != null)
+        {
+            resource.openStream().readBytes()
+        }
+        else
+        {
+            Files.readAllBytes(source)
+        }
 
         // Read the first 8-bytes which is the length.
         // TODO: Determine why the following doesn't work at some point:
