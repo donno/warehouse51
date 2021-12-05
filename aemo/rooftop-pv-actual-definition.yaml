@@ -1,0 +1,39 @@
+!file
+name: Rooftop PV - Actual
+dataset: rooftop-pv-actual
+description: 'CSV Reports for MMSDM package: DEMAND_FORECAST'
+reports: 
+- !report
+   name: ROOFTOP_PV_ACTUAL
+   description: Estimate of regional Rooftop Solar actual generation for each half-hour interval in a
+      day
+   fields: 
+   - !field
+      name: INTERVAL_DATETIME
+      description: The forecast half-hour interval (time ending)
+      format: DATE
+   - !field
+      name: TYPE
+      description: One of DAILY, MEASUREMENT or SATELLITE. DAILY- best quality estimated actuals, available
+         day after. MEASUREMENT- best quality estimated actuals on day, delayed by 1 half hour. SATELLITE-
+         estimated actuals using satellite imagery, delayed by 1 half hour.
+      format: VARCHAR2(20)
+   - !field
+      name: REGIONID
+      description: Region identifier
+      format: VARCHAR2(20)
+   - !field
+      name: POWER
+      description: Estimated generation in MW at the interval end
+      format: NUMBER(12,3)
+   - !field
+      name: QI
+      description: Quality indicator. Represents the quality of the estimate.
+      format: NUMBER(2,1)
+   - !field
+      name: LASTCHANGED
+      description: Last date and time record changed
+      format: DATE
+   reportSubType: ACTUAL
+   reportType: ROOFTOP
+   reportVersion: 2
