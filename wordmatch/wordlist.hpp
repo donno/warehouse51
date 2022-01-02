@@ -25,7 +25,7 @@ class WordList
   // The storage for the words.
   std::unique_ptr<word_type[]> words;
 
-  // The number of charachter in words.
+  // The total number of characters in words (i.e across all words).
   std::size_t size;
 
   // The length of each word.

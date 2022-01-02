@@ -48,7 +48,7 @@ class WordList {
     private val words: ByteArray
 
     /**
-     * The lenght of each word.
+     * The length of each word.
      * A word list always contains the same length words.
      */
     private val length: Long
@@ -125,7 +125,7 @@ class WordList {
     }
 
     /**
-     * Te key is simply the letters in the word sorted.
+     * The key is simply the letters in the word sorted.
      */
     fun key(index: Int): String {
         val start = entryOffset(index)
@@ -143,7 +143,7 @@ class WordList {
         //
         // The null-terminator makes it easier for C & C++ to print out the
         // word and the new line makes it easier to view the resulting file
-        // in a hex editor.
+        // in a text editor.
         val entryLength = length.toInt() * 2 + 2
         return SIZE_OF_LENGTH + index * entryLength
     }
