@@ -1,0 +1,4 @@
+# Lines start with # are commented out.
+# NewBranchName[:sourceBranch] commit [commit]*
+BranchA:origin/master bab47bb20ff63562e01740c806452528417db672 b647ca9ba1e6bf3adcba2a4cf282370bd0d123e7
+BranchB 0a23655d582d94d26926609026f21689a06bcaf6
