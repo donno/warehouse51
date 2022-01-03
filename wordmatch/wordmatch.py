@@ -235,12 +235,23 @@ def filter_words_with_duplicates(word):
     return len(set(word)) == len(word)
 
 
-if __name__ == '__main__':
-    #unittest.main()
-    #steps()
-    words = WordList('data/wordlist5.bin')
-    choose_best_word(words)
+def report(words: WordList, matches, missing_matches):
+    candidates_with_dupes = filtered_words(words, matches, missing_matches)
+    candidates_without_dupes = filtered_words(
+        candidates_with_dupes, filter_words_with_duplicates)
 
+    if candidates_without_dupes:
+        print(f'Candinates (no duplicates)')
+        print('  ' + '\n  '.join(candidates_without_dupes))
+        if len(candidates_without_dupes) < 5:
+            print('Candinates (with duplicates)')
+            print('  ' + '\n  '.join(candidates_with_dupes))
+    else:
+        print('Candinates (with duplicates)')
+        print('  ' + '\n  '.join(candidates_with_dupes))
+
+
+def jan3(words: WordList):
     # AROSE
     #
     # Results: RSE exist but not in those positions.
@@ -260,3 +271,30 @@ if __name__ == '__main__':
 
     print(f'Candidates: {len(candidates)}')
     print('\n'.join(candidates))
+
+
+def jan4(words: WordList):
+    print('Initial candindates')
+    print('  ' + '\n  '.join(choose_best_word(words)))
+
+    # AROSE
+    #
+    # Results: OS exist and is in those position everything else was a miss.
+    matches = filter([None, None, 'O', 'S', None], '')
+    missing_matches = filter_misses(['', '', '', '', ''], 'ARE')
+    print('> After 1st guess')
+    report(words, matches, missing_matches)
+
+    # Ghost (This time the fact I filtered duplicated was bad as it was
+    # duplicate)
+    matches = filter([None, None, 'O', 'S', 'T'], '')
+    missing_matches = filter_misses(['', '', '', '', ''], 'GHARE')
+    print('> After 2nd guess')
+    report(words, matches, missing_matches)
+
+
+if __name__ == '__main__':
+    #unittest.main()
+    #steps()
+    words = WordList('data/wordlist5.bin')
+    jan4(words)
