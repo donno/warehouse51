@@ -182,6 +182,167 @@ class FilterMissesTest(unittest.TestCase):
         self.assertFalse(matches('BOUGH'))
 
 
+class MatchWord:
+    """Implement a game where a word is chosen and the player must take guesses
+    at the word.
+    """
+
+    class GuessCountExceededError(ValueError):
+        def __init__(self):
+            super().__init__('Too many guesses were taken.')
+
+
+    class GuessResult:
+        """
+        The encoded result works as follows if the target is:
+            WATER
+        The first guess is:
+            AROSE
+        Then for each letter in the guess that is not in the target will have
+        a 0, each letter in the guess that is in the right position will have a
+        1 and 2 otherwise (i.e letters in the target but in the wrong space).
+        """
+
+        def __init__(self, encoded_result: str):
+            self.encoded_result = encoded_result
+
+        def __eq__(self, other: object) -> bool:
+            other_encoded_result = getattr(other, 'encoded_result', None)
+            if other_encoded_result:
+                return self.encoded_result == other_encoded_result
+            return self.encoded_result == other
+
+        def __repr__(self):
+            return f'GuessResult({self.encoded_result})'
+
+        @property
+        def count_correct_letter_and_position(self):
+            return self.encoded_result.count('1')
+
+        @property
+        def count_correct_letter_and_wrong_position(self):
+            return self.encoded_result.count('2')
+
+    # TODO: Add validation to ensure target and any guesses are valid works
+    # based on a dictionary.
+
+    def __init__(self, target):
+        if len(target) != 5:
+            raise ValueError('Target word must be at 5 characters long.')
+
+        self.target = target
+        self.guess_number = 0
+
+    def guess(self, word):
+        # The target word length is known information and thus is something
+        # that the caller can know for free.
+        target_length = len(self.target)
+        if len(word) != target_length:
+            raise ValueError(
+                f'Target word is {target_length} characters long. The guess '
+                f'had only {len(word)}')
+
+        target = self.target.upper()
+        word = word.upper()
+
+        if target == word:
+            return self.GuessResult('1' * target_length), True
+
+        def classify(letter_target, letter_guess):
+            if letter_target == letter_guess:
+                return '1'
+
+            if letter_guess not in target:
+                return '0'
+
+            return '?'
+
+        # First pass - find exact matches and complete misses.
+        encoded_result = [classify(a, b) for a, b in zip(target, word)]
+
+        # Second pass - resolve ? to 2 or to a 0 if it was a double letter.
+        #
+        # If the guess was "floor" but the target was flour we don't want to
+        # say the second o is is simply in the wrong position.
+        remaining_letters = {
+            letter for letter, r in zip(target, encoded_result)
+            if r != '1'
+        }
+
+        def classify_wrong_spot(letter_guess, encoded):
+            if encoded == '?':
+                if letter_guess in remaining_letters:
+                    remaining_letters.remove(letter_guess)
+                    return '2'
+                else:
+                    return '0'
+
+            return encoded
+
+        encoded_result = [
+            classify_wrong_spot(letter_guess, encoded)
+            for letter_guess, encoded in zip(word, encoded_result)
+        ]
+
+        self.guess_number += 1
+
+        if self.guess_number == 6:
+            raise self.GuessCountExceededError()
+
+        return self.GuessResult(''.join(encoded_result)), False
+
+
+class MatchWordTest(unittest.TestCase):
+    def test_validate_target_length(self):
+        with self.assertRaises(ValueError):
+            MatchWord('a')
+
+        with self.assertRaises(ValueError):
+            MatchWord('abc')
+
+        with self.assertRaises(ValueError):
+            MatchWord('abcdefghji')
+
+        MatchWord('abcde')  # Expected length is 5.
+
+    def test_validate_guess_length(self):
+        game = MatchWord('abcde')
+        with self.assertRaises(ValueError):
+            game.guess('a')
+
+        with self.assertRaises(ValueError):
+            game.guess('abc')
+
+        with self.assertRaises(ValueError):
+            game.guess('abcdefghji')
+
+        game.guess('abcde')
+
+    def test_first_guess_right(self):
+        game = MatchWord('WATER')
+        game.guess('WATER')
+
+    def test_first_guess_miss(self):
+        game = MatchWord('WATER')
+        result = game.guess('AROSE')
+        self.assertEqual(result, '22002')
+
+    def test_guess_duplicates(self):
+        """Duplicate letter shouldn't be counted as misses twice."""
+        game = MatchWord('FLOUR')
+        result = game.guess('FLOOR')
+        self.assertNotEqual(result, '11121')
+        self.assertEqual(result, '11101')
+
+    def test_too_many_guesses(self):
+        game = MatchWord('WATER')
+        for _ in range(0, 5):
+            game.guess('AROSE')
+
+        with self.assertRaises(MatchWord.GuessCountExceededError):
+            game.guess('AROSE')
+
+
 def steps():
     words = WordList('data/wordlist5.bin')
 
