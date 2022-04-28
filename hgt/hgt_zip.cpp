@@ -10,6 +10,10 @@
 // cl /nologo /EHsc /std:c++20 hgt_zip.cpp /DWITH_HGT_MAIN
 //   This also needs the include path for libzip and the path to the zip.lib
 //   as well.
+// g++-11 -O1 -g -std=c++20 -DWITH_HGT_MAIN hgt_zip.cpp  -lzip
+//
+// Note: WITH_HGT_MAIN is only needed when compiling an executable that can be
+// run for testing purposes.
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,12 +21,11 @@
 
 #include <zip.h>
 
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
-
-#include <iostream>
 
 namespace
 {
@@ -48,10 +51,34 @@ namespace
     }
 }
 
+class HGT::ZIP::Archive
+{
+    local::zip_ptr_t myZip;
+    zip_uint64_t myHgtIndex;
+    zip_stat_t myHgtStat;
+
+public:
+    Archive(const char* Path);
+
+    zip_t* Zip() { return myZip.get(); }
+    zip_uint64_t HgtIndex() const { return myHgtIndex; }
+    const char* HgtName() const { return myHgtStat.name; }
+
+    // Determine the format of the HGT from its uncompressed file size.
+    HGT::HgtFormat Format() const;
+};
+
+
 local::zip_ptr_t local::OpenFile(const char* Path)
 {
     int error;
     auto zip = zip_ptr_t{zip_open(Path, ZIP_RDONLY, &error), &zip_close};
+
+    if (zip)
+    {
+        return zip;
+    }
+
     if (error == ZIP_ER_OPEN)
     {
         throw std::runtime_error(
@@ -67,8 +94,21 @@ local::zip_ptr_t local::OpenFile(const char* Path)
         throw std::runtime_error(
             "The file specified by path is not a ZIP file.");
     }
+    else if (error == ZIP_ER_MEMORY)
+    {
+        throw std::runtime_error(
+            "The file specified by path could not be opened as the required "
+            "memory could not be allocated.");
+    }
+    else if (error = ZIP_ER_READ)
+    {
+        // This should check errno for details.
+        throw std::runtime_error(
+            "A read error occurred when reading ZIP file.");
+    }
 
-    return zip;
+    throw std::runtime_error(
+        "An unknown error occurred when opening ZIP file.");
 }
 
 zip_uint64_t local::FindHgtInZip(zip_t *Zip)
@@ -88,46 +128,74 @@ zip_uint64_t local::FindHgtInZip(zip_t *Zip)
 
 HGT::HgtFormat HGT::ZIP::IdentifyHgtFile(const char* Path)
 {
-    auto zip = local::OpenFile(Path);
+    const Archive archive(Path);
+    return archive.Format();
+}
 
+void HGT::ZIP::ForEachHeight(const char *Path, HeightCallback Function)
+{
+    Archive archive(Path);
+    return ForEachHeight(&archive, std::move(Function));
+}
+
+HGT::ZIP::Archive::Archive(const char* Path)
+: myZip(local::OpenFile(Path))
+{
     // Find the file with the .hgt suffix.
-    auto hgtIndex = local::FindHgtInZip(zip.get());
-    if (hgtIndex == std::numeric_limits<zip_uint64_t>::max())
+    myHgtIndex = local::FindHgtInZip(myZip.get());
+    if (myHgtIndex == std::numeric_limits<zip_uint64_t>::max())
     {
         throw std::runtime_error(
             "The file specified by path does not contain a HGT file.");
     }
 
-    zip_stat_t stat;
-    zip_stat_init(&stat);
-    if (zip_stat_index(zip.get(), hgtIndex, ZIP_FL_ENC_GUESS, &stat) != 0)
+    zip_stat_init(&myHgtStat);
+    if (zip_stat_index(myZip.get(), myHgtIndex, ZIP_FL_ENC_GUESS,
+        &myHgtStat) != 0)
     {
-        // Unable to determine size
-        return HgtFormat::Unknown;
+        throw std::runtime_error(
+            "Unable to information about the HGT file within the ZIP.");
     }
+}
 
-    const auto size = stat.size / 2;
+HGT::HgtFormat HGT::ZIP::Archive::Format() const
+{
+    const auto size = myHgtStat.size / 2;
+
     if (size == 3601 * 3601) return HgtFormat::SRTM1;
     if (size == 1201 * 1201) return HgtFormat::SRTM3;
 
     return HgtFormat::Unknown;
 }
 
-void HGT::ZIP::ForEachHeight(const char *Path, HeightCallback Function)
+void HGT::ZIP::Close(Archive* Zip)
+{
+    // By providing the delete within this translation unit it allows Archive
+    // to essentally be a pointer-to-implementation.
+    delete Zip;
+}
+
+HGT::ZIP::ArchivePtr HGT::ZIP::Open(const char* Path)
+{
+    return ArchivePtr{new Archive(Path), &Close};
+}
+
+HGT::HgtFormat HGT::ZIP::IdentifyHgtFile(Archive* Zip)
+{
+    return Zip->Format();
+}
+
+std::string HGT::ZIP::FileName(Archive* Zip)
+{
+    return {Zip->HgtName()};
+}
+
+void HGT::ZIP::ForEachHeight(Archive* Zip, HeightCallback Function)
 {
     using zip_file_ptr_t = std::unique_ptr<zip_file_t, decltype(&zip_fclose)>;
 
-    auto zip = local::OpenFile(Path);
-
-    // Find the file with the .hgt suffix.
-    auto hgtIndex = local::FindHgtInZip(zip.get());
-    if (hgtIndex == std::numeric_limits<zip_uint64_t>::max())
-    {
-        throw std::runtime_error(
-            "The file specified by path does not contain a HGT file.");
-    }
-
-    zip_file_ptr_t file{zip_fopen_index(zip.get(), hgtIndex, 0), &zip_fclose};
+    zip_file_ptr_t file{zip_fopen_index(Zip->Zip(), Zip->HgtIndex(), 0),
+                        &zip_fclose};
 
     if (!file)
     {

@@ -19,6 +19,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <string>
 #include <utility>
 
 namespace HGT
@@ -31,8 +33,31 @@ namespace HGT
         // The height provided to the callback function is in metres
         void ForEachHeight(const char* Path, HeightCallback Function);
 
-        // TODO: Add a version that can open the ZIP once, and query the
-        // format then read the heights.
+        class Archive;
+
+        // Closes the open ZIP archive.
+        void Close(Archive* Zip);
+
+        // Provides a scoped bound resource which will close the archive when
+        // an object of this type goes out-of-scope.
+        using ArchivePtr = std::unique_ptr<Archive, decltype(&Close)>;
+
+        // Opens the ZIP archive at the given path.
+        //
+        // If there is an error it throws a std::runtime_error with the
+        // details
+        ArchivePtr Open(const char* Path);
+
+
+        // Returns the format of the HGT file within the ZIP archive.
+        HGT::HgtFormat IdentifyHgtFile(Archive* Zip);
+
+        // Returns the name of the HGT file within the ZIP archive.
+        std::string FileName(Archive* Zip);
+
+        // For each height in the file in the Zip calls Function(height).
+        // The height provided to the callback function is in metres
+        void ForEachHeight(Archive* Zip, HeightCallback Function);
     }
 }
 
