@@ -1,8 +1,8 @@
-Hangeul (Korean)
+Hangeul
 ================
 
-The language is also commonly referred to as Hangul. Its how it is named on
-Wikipedia and in the Unicode standard.
+The Korean alphabet is also commonly referred to as Hangul. Its how it is name
+on Wikipedia and in the Unicode standard.
 
 Consonants
 ----------
