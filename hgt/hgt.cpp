@@ -19,7 +19,8 @@
 // Heights are in meters referenced to the WGS84/EGM96 geoid.
 //
 // Compiling: (MSVC) cl /EHsc /std:c++17 /nologo /DWITH_HGT_MAIN hgt.cpp
-//
+//                   clang++ -std=c++20 -DWITH_HGT_MAIN hgt.cpp
+//                   g++-11 -std=c++20 -DWITH_HGT_MAIN hgt.cpp
 //===----------------------------------------------------------------------===//
 
 #include "hgt.hpp"
@@ -44,7 +45,7 @@ namespace
         // If true then the entire file will be loaded into memory.
         // This is 3601 * 3601 * 2 bytes (~25MB) for a SRTM1 and 1201 * 1201 *
         // 2 bytes (~3MB). Keep in mind the effects of this if doing this in
-        // parell.
+        // parallel.
         constexpr bool UseSingleReadCall = true;
 
         // If true then ForEachHeightWithIndex() will simply use a suitable
@@ -259,6 +260,10 @@ int main()
 {
     try
     {
+        const auto [latitude, longitude] =
+            HGT::LocationFromHgtName("N03W074.hgt");
+        std::cout << latitude << ", " << longitude << std::endl;
+
         HGT::ForEachHeight(
             "N03W074.hgt",
             //"N52W008.hgt",
