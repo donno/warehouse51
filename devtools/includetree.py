@@ -140,7 +140,8 @@ if __name__ == '__main__':
   parser.add_argument('--remove-prefix',
                       help='remove the following prefix from the start of '
                            'each path.',
-                      dest='common_path_prefix')
+                      dest='common_path_prefix',
+                      default='')
 
   args = parser.parse_args()
 
