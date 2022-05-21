@@ -112,6 +112,62 @@ def add_full_address(address_view):
     return address_view
 
 
+def add_full_address_with_locality(base_directory, address_view,
+                                   use_short_street_type=True):
+    """Adds the name of the locality (essentially suburb).
+
+    This requires the base directory for the data as it needs to load an
+    additional data file.
+
+    This doesn't require add_full_address() to be called first.
+    """
+
+    #address_view['FULL_ADDRESS'] = address_view.apply(_address, axis=1)
+    locality_file = os.path.join(
+        base_directory, 'Standard', 'SA_LOCALITY_psv.csv')
+    locality = pandas.read_csv(locality_file, '|',
+                               usecols=['LOCALITY_PID', 'LOCALITY_NAME'])
+
+    # STREET_TYPE_CODE will be STREET, ROAD, COURT instead of ST, RD, CT.
+    # For the purpose of this function lets use
+    # the latter is needed instead the information can be looked up in
+    # Authority_Code_STREET_TYPE_AUT_psv.psv to do the mapping.
+    if use_short_street_type:
+        street_type_aut_file = os.path.join(
+            base_directory, 'Authority Code',
+            'Authority_Code_STREET_TYPE_AUT_psv.psv')
+
+        code_to_name = {}  # This is what it called in the file.
+        with open(street_type_aut_file) as reader:
+            next(reader)  # Skip the heading.
+            for line in reader:
+                code, name, _ = line.split('|')  # Description is the third.
+                code_to_name[code] = name
+    else:
+        code_to_name = {}
+
+    # Add the locality name column.
+    address_view = address_view.join(
+        locality.set_index('LOCALITY_PID'),
+        on='LOCALITY_PID',
+    )
+
+    def _create_full_address(row):
+        address = _address(row)
+        if use_short_street_type:
+            # This feature would be simpler if it was part of the  _address
+            # function.
+            street_type_code = address.split(' ')[-1]
+            name = code_to_name[street_type_code]
+            address = address[:-len(street_type_code)] + name
+
+        return '{} {}'.format(address, row['LOCALITY_NAME'])
+
+    address_view['FULL_ADDRESS'] = address_view.apply(_create_full_address,
+                                                      axis=1)
+    return address_view
+
+
 def print_addresses(address_view):
     transform = latlong_to_cartsian()
 
