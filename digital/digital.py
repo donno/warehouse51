@@ -129,11 +129,11 @@ class FullAdder:
 
     It returns the sum and the carry, the carry is like the overflow.
     """
-    def __init__(self):
+    def __init__(self, a=None, b=None, carry_in=None):
         # Inputs
-        self.a = Input('a')
-        self.b = Input('b')
-        self.carry_in = Input('carry_in')
+        self.a = a or Input('a')
+        self.b = b or Input('b')
+        self.carry_in = carry_in or Input('carry_in')
 
         # In between.
         c = XorGate(self.a, self.b)
@@ -197,21 +197,18 @@ class FullAdderNorOnly:
         }
 
 
-class Adder8Bit:
-    """An 8-bit adder using only NOR (a universal logic gate)."""
+class AdderNBit:
+    """An N-bit adder using only NOR (a universal logic gate)."""
 
-    # NOTE: IN theory it should be easy to switch the full adder class
-    # between FullAdderNorOnly and FullAdder easily.
+    FULL_ADDER_CLASS = FullAdderNorOnly
+    BIT_LENGTH = 8  # Default
 
-    BIT_LENGTH = 8
-
-    def __init__(self):
-
-        adder_class = FullAdderNorOnly
-
+    def __init__(self, bits_a=None, bits_b=None):
         # Inputs
-        self.bits_a = [Input(f'a{i}') for i in range(self.BIT_LENGTH)]
-        self.bits_b = [Input(f'b{i}') for i in range(self.BIT_LENGTH)]
+        self.bits_a = bits_a or [
+            Input(f'a{i}') for i in range(self.BIT_LENGTH)]
+        self.bits_b = bits_b or [
+            Input(f'b{i}') for i in range(self.BIT_LENGTH)]
 
         # This is an internal input.
         self.initial_carry = Input('carry_init')
@@ -225,7 +222,7 @@ class Adder8Bit:
             # Ideally, I would like this to be able to unpack into the sum
             # and carry out, but that involves __getitem__ and __len__ or the
             # like.
-            adder = adder_class(bit_a, bit_b, carry_in)
+            adder = self.FULL_ADDER_CLASS(bit_a, bit_b, carry_in)
             bit_sum, carry_out = adder.sum, adder.carry_out
             self.bits_sum.append(bit_sum)
             carry_in = carry_out
@@ -236,20 +233,31 @@ class Adder8Bit:
             raise ValueError("'a' must be positive integer.")
         if b < 0:
             raise ValueError("'b' must be positive integer.")
+
+        max_value = 2 ** self.BIT_LENGTH - 1
+        bit_count = self.BIT_LENGTH
+
         if a.bit_length() > self.BIT_LENGTH:
             raise ValueError(
-                "'a' must be less than 255 (8-bit unsigned integer).")
+                f"'a' must be less than {max_value} ({bit_count}-bit unsigned "
+                "integer).")
         if b.bit_length() > self.BIT_LENGTH:
             raise ValueError(
-                "'b' must be less than 255 (8-bit unsigned integer).")
+                f"'b' must be less than {max_value} ({bit_count}-bit unsigned "
+                "integer).")
 
         # Convert integer to bits and set the inputs.
-        for a, a_in in zip(reversed(self.integer_to_bool_array(a)),
+        for a, a_in in zip(reversed(self.integer_to_bool_array(
+                                        a, self.BIT_LENGTH)),
                            self.bits_a):
             a_in.set(a)
-        for b, b_in in zip(reversed(self.integer_to_bool_array(b)),
+        for b, b_in in zip(reversed(self.integer_to_bool_array(
+                                        b, self.BIT_LENGTH)),
                            self.bits_b):
             b_in.set(b)
+
+        if any(bit.output is None for bit in self.bits_sum):
+            raise RuntimeError('An output was not set.')
 
         return self.bool_array_to_integer(
             bit.output for bit in reversed(self.bits_sum))
@@ -260,7 +268,8 @@ class Adder8Bit:
 
         The most signifiant bit will be at index 0.
         """
-        return [bool(integer & (1 << (7 - n))) for n in range(bit_length)]
+        return [bool(integer & (1 << (bit_length - 1 - n)))
+                for n in range(bit_length)]
 
     @staticmethod
     def bool_array_to_integer(bool_array):
@@ -277,6 +286,27 @@ class Adder8Bit:
     def outputs(self) -> dict:
         """The outputs of this component."""
         return {f'sum{i}': bit for i, bit in enumerate(self.bits_sum)}
+
+
+class Adder8Bit(AdderNBit):
+    """An 8-bit adder using only XOR, AND and OR gates."""
+
+    FULL_ADDER_CLASS = FullAdder
+    BIT_LENGTH = 8
+
+
+class Adder8BitUniversal(AdderNBit):
+    """An 8-bit adder using only NOR (a universal logic gate)."""
+
+    FULL_ADDER_CLASS = FullAdderNorOnly
+    BIT_LENGTH = 8
+
+
+class Adder16BitUniversal(AdderNBit):
+    """An 16-bit adder using only NOR (a universal logic gate)."""
+
+    FULL_ADDER_CLASS = FullAdderNorOnly
+    BIT_LENGTH = 16
 
 
 class Visitor:
@@ -671,6 +701,30 @@ class ComponentTests(unittest.TestCase):
             for y in range(256 - x):
                 with self.subTest(a=x, b=y):
                     self.assertEqual(Adder8Bit()(x, y), x + y)
+
+    def test_adder_8bit_universal(self):
+        """Test the 8-bit adder performing simple calculations."""
+        self.assertEqual(Adder8BitUniversal()(2, 5), 7)
+        self.assertEqual(Adder8BitUniversal()(35, 109), 144)
+
+        # Test (0 to N) + 0
+        for i in range(256):
+            self.assertEqual(Adder8BitUniversal()(i, 0), i)
+
+        # Test 0 + (0 to N)
+        for i in range(256):
+            self.assertEqual(Adder8BitUniversal()(0, i), i)
+
+    def test_adder_8bit_universal_every_combination(self):
+        """Test every possible combination that doesn't overflow."""
+        for x in range(256):
+            for y in range(256 - x):
+                with self.subTest(a=x, b=y):
+                    self.assertEqual(Adder8BitUniversal()(x, y), x + y)
+
+    def test_adder_16bit_universal(self):
+        """Test the 8-bit adder performing simple calculations."""
+        self.assertEqual(Adder16BitUniversal()(1000, 3000), 4000)
 
 
 if __name__ == '__main__':
