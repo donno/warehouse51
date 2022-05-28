@@ -7,7 +7,6 @@ import unittest
 __TODO__ = """
 - Try to make use of subgraph in GraphViz to represent component like the
   FullAdder as one unit.
-- Extend Visitor to handle components (objects with the outputs property)
 - Improve Visitor to recognise the name of outputs is the name of the output
   of the gate not the gate itself.
 - Create a half-adder to start the 8-bit adder instead of using a full-adder
@@ -127,7 +126,7 @@ class FullAdder:
     """Represents the digital electronic component known as a full adder.
 
     It essentially can add two bits together.
-    
+
     It returns the sum and the carry, the carry is like the overflow.
     """
     def __init__(self):
@@ -309,12 +308,30 @@ class Visitor:
 
         elif isinstance(gate_or_input, Input):
             self.accept_input(gate_or_input)
+        elif hasattr(gate_or_input, 'outputs'):
+            # This is a component that has the result of gates as their output.
+            component = gate_or_input
+            self.enter_component(component, name)
+            for name, gate in component.outputs.items():
+                if isinstance(gate, list):
+                    for sub_gate in gate:
+                        self.accept(sub_gate)
+                else:
+                    self.accept(gate, name)
+            self.leave_component(component, name)
+
+            sources = getattr(gate_or_input, 'inputs', None)
+            if self.handle_connections and sources:
+                # The key of the sources is a name of the inputs.
+                # The value of the sources is the 'gate'/'component'.
+                for i, source in enumerate(sources.values()):
+                    self.accept_connection(source, component, i)
         else:
             # The idea here is to provide a 'Gate' abstraction so there is
             # a generic inputs and outputs property for gates, like wise
             # for 'components'
             raise NotImplementedError(
-                f'Unhandled type {type(gate_or_input)}')
+                f'Unhandled type {type(gate_or_input)} - {gate_or_input}')
 
         self.seen_nodes.add(id(gate_or_input))
 
@@ -326,6 +343,14 @@ class Visitor:
 
     def accept_connection(self, source, destination, source_index):
         raise NotImplementedError('Derived class should implement')
+
+    def enter_component(self, component, name):
+        # Optional - derived class may choose to override this function.
+        pass
+
+    def leave_component(self, component, name):
+        # Optional - derived class may choose to override this function.
+        pass
 
 
 def graph(component, writer):
@@ -346,6 +371,13 @@ def graph(component, writer):
                 f'  node_{id(gate):x} [shape=box, label="{name}", ' +
                 'width=3, height=2]\n')
 
+        def enter_component(self, component, name=None):
+            # This needs to describe a group / sub-graph.
+            name = name or component.__class__.__name__
+            writer.write(
+                f'  node_{id(component):x} [shape=octagon, label="{name}", ' +
+                'width=3, height=2]\n')
+
     class OutputEdges(Visitor):
         def accept_input(self, input):
             # Nothing to do, as the edge must have been referred to by a gate.
@@ -361,15 +393,11 @@ def graph(component, writer):
     # This only graphs path reachable from the outputs.
     writer.write(f'digraph {component.__class__.__name__} {{\n')
 
-    # Write out all the nodes first.
-    visitor = OutputNodes()
-    for name, gate in component.outputs.items():
-        visitor.accept(gate, name)
+    # Visit each node and write them out. Do this first.
+    OutputNodes().accept(component)
 
-    # Write out the edges.
-    visitor = OutputEdges()
-    for name, gate in component.outputs.items():
-        visitor.accept(gate, name)
+    # Visit the edges and write them edges.
+    OutputEdges().accept(component)
 
     writer.write('}')
 
