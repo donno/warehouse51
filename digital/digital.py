@@ -11,7 +11,11 @@ __TODO__ = """
   of the gate not the gate itself.
 - Create a half-adder to start the 8-bit adder instead of using a full-adder
   with the carry set to 0.
+- Better testing of the Output class. It was added to be used in graphs and the
+  visitor at the moment so evaluation while works is not quite as nice as I
+  would like.
 """
+
 
 class Input:
     """Represents the input of a gate, it has an output which is populated
@@ -47,6 +51,52 @@ class Input:
 
     def __repr__(self) -> str:
         return f'Input({self.name!r})'
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Output:
+    """Represents the output of a component which is an input to another
+    component/gate.
+
+    This is used to closely tie the output pin on the given component to
+    something else.
+    """
+
+    def __init__(self, name, component, output_index):
+        self.name = name
+        self.component = component
+
+        # The output caches if it was N'th output of the component. This avoids
+        # having to go find this output in components.outputs.
+        self.output_index = output_index
+
+        self.output = None
+        self.callbacks = []
+
+    def set(self, value):
+        """Set the value of the input.
+
+        This will trigger anything depending on this value to be evaluated.
+        """
+
+        # TODO: Consider making output a property and handling this in the
+        # setter.
+        self.output = value
+
+        for callback in self.callbacks:
+            callback.eval()
+
+    def register_with(self, dependant):
+        """Register with this input to inform dependant when the value is set.
+
+        It is expected that dependant has an eval() function.
+        """
+        self.callbacks.append(dependant)
+
+    def __repr__(self) -> str:
+        return f'Output({self.name})'
 
     def __str__(self) -> str:
         return self.name
@@ -160,6 +210,7 @@ class FullAdder:
             'sum': self.sum,
             'carry_out': self.carry_out,
         }
+
 
 class FullAdderNorOnly:
     """A full adder using only NOR (a universal logic gate)."""
@@ -309,6 +360,43 @@ class Adder16BitUniversal(AdderNBit):
     BIT_LENGTH = 16
 
 
+class IntegerToBinary:
+    """Represents the component that takes an integer and converts them to
+    individual booleans (bits)."""
+
+    # This class is an component for dealing with the conversion to digital
+    # logic.
+    #
+    # The design of the class isn't quite right for fitting with the evaluation
+    # logic, as it really needs a higher level thing to recognise this should
+    # be set and then propagate along.
+
+    def __init__(self, name, bit_length=8):
+        self.bit_length = bit_length
+        self._outputs = [Output(f'{name}{i}', self, i)
+                         for i in range(self.bit_length)]
+
+    @property
+    def outputs(self):
+        return {
+            f'bit{i}': bit for i, bit in enumerate(self._outputs)
+        }
+
+    def set(self, value):
+        values = reversed(self.integer_to_bool_array(value, self.bit_length))
+        for output, value in zip(self._outputs, values):
+            output.set(value)
+
+    @staticmethod
+    def integer_to_bool_array(integer, bit_length=8):
+        """Return a boolean array representing the integer.
+
+        The most signifiant bit will be at index 0.
+        """
+        return [bool(integer & (1 << (bit_length - 1 - n)))
+                for n in range(bit_length)]
+
+
 class Visitor:
     """Implements a form of the visitor pattern to walk over components."""
 
@@ -335,11 +423,19 @@ class Visitor:
             self.accept(gate.b)
 
             if self.handle_connections:
-                self.accept_connection(gate.a, gate, 0)
-                self.accept_connection(gate.b, gate, 1)
+                # TODO: Should this handle connections from Output or let
+                # everyone deal with that in accept_connection?
+
+                # Binary gate only has one output so the destination is 0.
+                self.accept_connection(gate.a, gate, 0, 0)
+                self.accept_connection(gate.b, gate, 1, 0)
 
         elif isinstance(gate_or_input, Input):
             self.accept_input(gate_or_input)
+        elif isinstance(gate_or_input, Output):
+            # Outputs are not represented as their own thing. However, this
+            # needs to ensure the component it is part of is visited.
+            self.accept(gate_or_input.component)
         elif hasattr(gate_or_input, 'outputs'):
             # This is a component that has the result of gates as their output.
             component = gate_or_input
@@ -362,7 +458,7 @@ class Visitor:
                     sources = sources.values()
 
                 for i, source in enumerate(sources):
-                    self.accept_connection(source, component, i)
+                    self.accept_connection(source, component, i, 0)
         else:
             # The idea here is to provide a 'Gate' abstraction so there is
             # a generic inputs and outputs property for gates, like wise
@@ -370,14 +466,14 @@ class Visitor:
             raise NotImplementedError(
                 f'Unhandled type {type(gate_or_input)} - {gate_or_input}')
 
-
     def accept_input(self, input):
         raise NotImplementedError('Derived class should implement')
 
     def accept_gate(self, gate, name=None):
         raise NotImplementedError('Derived class should implement')
 
-    def accept_connection(self, source, destination, source_index):
+    def accept_connection(self, source, destination,
+                          source_index, destination_index):
         raise NotImplementedError('Derived class should implement')
 
     def enter_component(self, component, name):
@@ -422,7 +518,13 @@ def graph(component, writer):
         def accept_gate(self, gate, name=None):
             pass
 
-        def accept_connection(self, source, destination, source_index):
+        def accept_connection(self, source, destination,
+                              source_index, destination_index):
+            if isinstance(source, Output):
+                # The node the connection is from is component, however the
+                # port it is connected to is source.
+                source = source.component
+
             writer.write(
                 f'  node_{id(source):x} -> node_{id(destination):x}\n')
 
@@ -701,6 +803,7 @@ class ComponentTests(unittest.TestCase):
         for i in range(256):
             self.assertEqual(Adder8Bit()(0, i), i)
 
+    @unittest.skip('Slow test')
     def test_adder_8bit_every_combination(self):
         """Test every possible combination that doesn't overflow."""
         for x in range(256):
@@ -721,6 +824,7 @@ class ComponentTests(unittest.TestCase):
         for i in range(256):
             self.assertEqual(Adder8BitUniversal()(0, i), i)
 
+    @unittest.skip('Slow test')
     def test_adder_8bit_universal_every_combination(self):
         """Test every possible combination that doesn't overflow."""
         for x in range(256):
@@ -731,6 +835,21 @@ class ComponentTests(unittest.TestCase):
     def test_adder_16bit_universal(self):
         """Test the 8-bit adder performing simple calculations."""
         self.assertEqual(Adder16BitUniversal()(1000, 3000), 4000)
+
+    def test_output(self):
+        """Tests the evaluation handling for Output class via IntegerToBinary.
+        """
+        a = IntegerToBinary('a')
+        b = IntegerToBinary('b')
+        adder = Adder8BitUniversal(a.outputs.values(), b.outputs.values())
+
+        a.set(102)
+        b.set(149)
+
+        values = [output.output for output in adder.outputs.values()]
+
+        value = Adder8BitUniversal.bool_array_to_integer(reversed(values))
+        self.assertEqual(value, 251)
 
 
 if __name__ == '__main__':
