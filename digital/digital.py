@@ -26,21 +26,32 @@ class Input:
 
     def __init__(self, name):
         self.name = name
-        self.output = None
         self.callbacks = []
+        self._output = None
 
-    def set(self, value):
-        """Set the value of the input.
+    @property
+    def output(self):
+        """The value of the input, which is output to be consumed by an input.
+        """
+        return self._output
+
+    @output.setter
+    def output(self, value):
+        """Set the output of the input, which is like setting its value.
 
         This will trigger anything depending on this value to be evaluated.
         """
 
-        # TODO: Consider making output a property and handling this in the
-        # setter.
-        self.output = value
+        self._output = value
 
         for callback in self.callbacks:
             callback.eval()
+
+    def set(self, value):
+        """Set the output of the input, which is like setting its value.
+
+        This will trigger anything depending on this value to be evaluated."""
+        self.output = value
 
     def register_with(self, dependant):
         """Register with this input to inform dependant when the value is set.
@@ -72,21 +83,34 @@ class Output:
         # having to go find this output in components.outputs.
         self.output_index = output_index
 
-        self.output = None
+        self._output = None
         self.callbacks = []
 
-    def set(self, value):
-        """Set the value of the input.
+    @property
+    def output(self):
+        """The value of the input, which is output to be consumed by an input.
+        """
+        return self._output
+
+    @output.setter
+    def output(self, value):
+        """Set the output of this output.
 
         This will trigger anything depending on this value to be evaluated.
         """
 
-        # TODO: Consider making output a property and handling this in the
-        # setter.
-        self.output = value
+        self._output = value
 
         for callback in self.callbacks:
             callback.eval()
+
+    def set(self, value):
+        """Set the value of this output.
+
+        This will trigger anything depending on this value to be evaluated.
+        """
+
+        self.output = value
 
     def register_with(self, dependant):
         """Register with this input to inform dependant when the value is set.
