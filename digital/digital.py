@@ -324,6 +324,8 @@ class Visitor:
         if self.visit_nodes_once and id(gate_or_input) in self.seen_nodes:
             return
 
+        self.seen_nodes.add(id(gate_or_input))
+
         if isinstance(gate_or_input, BinaryGate):
             gate = gate_or_input
 
@@ -354,7 +356,12 @@ class Visitor:
             if self.handle_connections and sources:
                 # The key of the sources is a name of the inputs.
                 # The value of the sources is the 'gate'/'component'.
-                for i, source in enumerate(sources.values()):
+
+                # Handle sources being a dictionary or a sequence.
+                if isinstance(sources, dict):
+                    sources = sources.values()
+
+                for i, source in enumerate(sources):
                     self.accept_connection(source, component, i)
         else:
             # The idea here is to provide a 'Gate' abstraction so there is
@@ -363,7 +370,6 @@ class Visitor:
             raise NotImplementedError(
                 f'Unhandled type {type(gate_or_input)} - {gate_or_input}')
 
-        self.seen_nodes.add(id(gate_or_input))
 
     def accept_input(self, input):
         raise NotImplementedError('Derived class should implement')
