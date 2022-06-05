@@ -126,9 +126,9 @@ int main(int argc, const char* argv[])
     }
 
     ASC::Header header = ASC::ReadFromFile(argv[1]);
-    printf("%d by %d at (%d, %d) with size %d\n", header.column_count,
-           header.row_count, header.cell_size,
-           header.lower_left_corner_x, header.lower_left_corner_y);
+    printf("%d by %d at (%d, %d) with size %f\n", header.column_count,
+           header.row_count, header.lower_left_corner_x,
+           header.lower_left_corner_y, header.cell_size);
     printf("Missing data value: %d\n", header.no_data_value);
 
     ASC::ReadHeights(argv[1], [](double value)
