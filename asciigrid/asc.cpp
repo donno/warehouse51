@@ -4,6 +4,7 @@
 // NAMESPACE    : ASC
 // PURPOSE      : Provides functions for working with ASCII grid files (.asc).
 // COPYRIGHT    : (c) 2022 Sean Donnellan. All Rights Reserved.
+// LICENSE      : The MIT License (see LICENSE.txt for details)
 // AUTHORS      : Sean Donnellan (darkdonno@gmail.com)
 // DESCRIPTION  : Provides functions for working with ASC files.
 //
@@ -106,7 +107,10 @@ void ASC::ReadHeights(const char* Path, HeightCallback Function)
     while (!input.eof())
     {
         input >> value;
-        Function(value);
+        if (input.good())
+        {
+            Function(value);
+        }
     }
 }
 
