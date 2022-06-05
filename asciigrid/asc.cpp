@@ -56,36 +56,34 @@ ASC::Header ASC::ReadFromFile(const char* Path)
     {
         // TODO: Handle errors cases.
         std::string key;
-        int value;
-        input >> key >> value;
-
+        input >> key;
         if (key == "ncols")
         {
-            header.column_count = value;
+            input >> header.column_count;
         }
         else if (key == "nrows")
         {
-            header.row_count = value;
+            input >> header.row_count;
         }
         else if (key == "cellsize")
         {
-            header.cell_size = value;
+            input >> header.cell_size;
         }
         else if (key == "xllcorner")
         {
-            header.lower_left_corner_x = value;
+            input >> header.lower_left_corner_x;
         }
         else if (key == "yllcorner")
         {
-            header.lower_left_corner_y = value;
+            input >> header.lower_left_corner_y;
         }
         else if (key == "NODATA_value")
         {
-            header.no_data_value = value;
+            input >> header.no_data_value;
         }
         else
         {
-            std::cerr << "unrecognised key" << key << std::endl;
+            std::cerr << "unrecognised key: \'" << key << "\'" << std::endl;
             std::abort();
         }
     }

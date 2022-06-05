@@ -20,7 +20,7 @@ namespace ASC
     {
         int column_count;
         int row_count;
-        int cell_size;
+        double cell_size;
         int lower_left_corner_x;
         int lower_left_corner_y;
         int no_data_value; // Represents the cell has no data in it.
