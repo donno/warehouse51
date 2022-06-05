@@ -32,9 +32,11 @@
 
 #include "asc.hpp"
 
+#include <charconv>
 #include <fstream>
-#include <memory>
 #include <iostream>
+#include <memory>
+#include <string>
 
 namespace
 {
@@ -93,6 +95,8 @@ ASC::Header ASC::ReadFromFile(const char* Path)
 
 void ASC::ReadHeights(const char* Path, HeightCallback Function)
 {
+    constexpr const bool read_line_at_time = true;
+
     std::ifstream input(Path);
 
     // Skip the fields.
@@ -101,13 +105,48 @@ void ASC::ReadHeights(const char* Path, HeightCallback Function)
         input.ignore(1024, '\n');
     }
 
-    double value;
-    while (!input.eof())
+    if constexpr (read_line_at_time)
     {
-        input >> value;
-        if (input.good())
+        std::string line;
+        while (std::getline(input, line))
         {
-            Function(value);
+            double value;
+            const auto end = line.data() + line.size();
+            for (const char* next = line.data(); next != end;)
+            {
+                auto [ptr, ec] { std::from_chars(next, end, value) };
+
+                // TODO: This should not be printing inside of this function.
+                if (ec == std::errc())
+                {
+                    Function(value);
+                }
+                else if (ec == std::errc::invalid_argument)
+                {
+                    fprintf(stderr, "Input was not a number, %s.\n", next);
+                }
+                else if (ec == std::errc::result_out_of_range)
+                {
+                    fprintf(stderr, "This number was outside the appliable range.\n");
+                }
+
+                // The general approach would be find the first non-space character.
+                if (ptr && *ptr == ' ') ++ptr;
+
+                next = ptr;
+            }
+        }
+    }
+    else
+    {
+        double value;
+        while (!input.eof())
+        {
+            input >> value;
+            if (input.good())
+            {
+                Function(value);
+            }
         }
     }
 }
@@ -129,10 +168,14 @@ int main(int argc, const char* argv[])
            header.lower_left_corner_y, header.cell_size);
     printf("Missing data value: %d\n", header.no_data_value);
 
-    ASC::ReadHeights(argv[1], [](double value)
+    std::size_t count = 0;
+    ASC::ReadHeights(argv[1], [&count](double value)
     {
         printf("%.4f\n", value);
+        ++count;
     });
+
+    printf("Read: %zu heights.\n", count);
 
     return 0;
 }

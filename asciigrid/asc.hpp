@@ -1,6 +1,6 @@
 #ifndef ASC_ASC_HPP
 #define ASC_ASC_HPP
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------===//
 //
 // NAME         : ASC
 // NAMESPACE    : ASC
@@ -10,7 +10,7 @@
 // AUTHORS      : Sean Donnellan (darkdonno@gmail.com)
 // DESCRIPTION  : Provides functions for working with ASC files.
 //
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------===//
 
 #include <functional>
 
@@ -38,5 +38,5 @@ namespace ASC
     void ReadHeights(const char* Path, HeightCallback Function);
 }
 
-//===--------------------------- End of the file --------------------------===//
+//===-------------------------- End of the file --------------------------===//
 #endif
