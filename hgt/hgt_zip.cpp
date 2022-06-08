@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string_view>
 
@@ -72,7 +73,16 @@ public:
 local::zip_ptr_t local::OpenFile(const char* Path)
 {
     int error;
+#ifdef HGT_ZIP_WITH_MUTEX
+    // libzip uses mktime() which is often not thread safe as it does timezone
+    // conversions.
+    static std::mutex zip_opener;
+    zip_opener.lock();
     auto zip = zip_ptr_t{zip_open(Path, ZIP_RDONLY, &error), &zip_close};
+    zip_opener.unlock();
+#else
+    auto zip = zip_ptr_t{zip_open(Path, ZIP_RDONLY, &error), &zip_close};
+#endif
 
     if (zip)
     {
