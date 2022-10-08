@@ -58,6 +58,18 @@ def select(app):
   item = app.tv.selection()[0]
   print(app.tv.item(item))
   print(item)
+  # This has not been implemented.
+
+
+def count(app, status):
+  """Count the number of descendants of the selected item."""
+  item = app.tv.selection()[0]
+
+  def count_children(item):
+    children = app.tv.get_children(item)
+    return len(children) + sum(count_children(child) for child in children)
+
+  status.config(text=f'{count_children(item)} descendants')
 
 
 def show(path, options):
@@ -74,8 +86,14 @@ def show(path, options):
   app.tv = ttk.Treeview(app)
   app.tv.pack(fill=BOTH, expand=1)
 
+  statusbar = Label(app, text="", bd=1, relief=SUNKEN, anchor=W)
+  statusbar.pack(side=BOTTOM, fill=X)
+
   menu = Menu(app, tearoff=0)
   menu.add_command(label="Select same", command=lambda app=app: select(app))
+  menu.add_command(label="Count descendants",
+                   command=lambda app=app,
+                   status=statusbar: count(app, status))
 
   def popup(event):
     app.menu = (event.x, event.y)
