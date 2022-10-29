@@ -59,9 +59,11 @@ def pandas_address_view(base_directory, filter_to_locality=None):
     def should_keep_address_detail_column(column):
         return column not in address_detail_columns_to_ignore
 
-    street_locality = pandas.read_csv(street_locality_file, '|',
+    street_locality = pandas.read_csv(street_locality_file,
+                                      sep='|',
                                       usecols=street_locality_columns)
-    address_detail = pandas.read_csv(address_detail_file, '|',
+    address_detail = pandas.read_csv(address_detail_file,
+                                    sep='|',
                                      dtype={
                                          'BUILDING_NAME': str,
                                          'NUMBER_FIRST': str,
@@ -69,7 +71,8 @@ def pandas_address_view(base_directory, filter_to_locality=None):
                                      },
                                      keep_default_na=False,
                                      usecols=should_keep_address_detail_column)
-    address_geocode = pandas.read_csv(address_default_geocode_file, '|',
+    address_geocode = pandas.read_csv(address_default_geocode_file,
+                                      sep='|',
                                       usecols=geocode_columns)
 
     if filter_to_locality:
