@@ -80,7 +80,7 @@ def load(path, name_fragment):
 def load_candidates(path):
     """Loads the list of candidates for each election for the event.
 
-    For example, the event may be teh 2019 Federal Election, and the two
+    For example, the event may be the 2019 Federal Election, and the two
     elections taking place are:
     - House of Representatives Election
     - Senate Election
@@ -161,8 +161,10 @@ if __name__ == '__main__':
         # and candidate.independent
     )
 
-    for k, v in domain_counter.most_common(20):
-        print(v, k)
+    if domain_counter:
+        print('Top 20 used domains of candidates')
+        for k, v in domain_counter.most_common(20):
+            print(v, k)
 
     profession_counter = collections.Counter(
         candidate.profession
@@ -170,5 +172,6 @@ if __name__ == '__main__':
         if candidate.profession
     )
 
+    print('Top 20 professions of candidates')
     for k, v in profession_counter.most_common(20):
         print(v, k)
