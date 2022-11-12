@@ -18,7 +18,7 @@ LICENSE      : The MIT License (see LICENSE.txt for details)
 
 TODO         :
   - Parse the rest of the format, at the moment it only does the parts that I
-    was intrested in at the time.
+    was interested in at the time.
   - Take more advantage of Construct such that its possible to do pe.parse(data)
     and it can resolve all the structures etc.
 
