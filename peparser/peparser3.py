@@ -5,10 +5,13 @@ facility defining the structures used in the file format which can then be
 used to parse an executable.
 
 The specification for the format can be found here:
-  https://msdn.microsoft.com/en-us/windows/hardware/gg463119.aspx
+    https://msdn.microsoft.com/en-us/windows/hardware/gg463119.aspx
 This will be referred to as the specification document here.
 
-The version of this script I wrote for Python 2, I had devleoped myself from
+The latest version is found at:
+    https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+
+The version of this script I wrote for Python 2, I had developed myself from
 the documentation. It was only a week later that I found that there was an
 example of the format in the library. For the Python 3 version, I've switched
 to using the pe32coff module from the construct's gallery.
@@ -22,6 +25,16 @@ TODO         :
     and it can resolve all the structures etc.
   - Add handling for the import table (the Python 2 / construct 2.5.3 handled
     that).
+  - Revisit the RVA to file offset work. See if its possible to use
+    section.rawdata instead of the entire file's data.
+
+KNOWN ISSUES:
+- Essentially imports(...) and output_bitmaps(...) have only been  tested with
+  ski32.exe.
+
+Notes:
+- .didat -> delay load section
+
 """
 
 import enum
@@ -73,6 +86,45 @@ resource_data_entry = Struct(
     "code_page" / Int32ul,
     "reserved" / Int32ul,
 )
+
+# Begin structures for parsing the .idata section (also known as the import
+# tables).
+import_directory_entry = Struct(
+    "import_name_table_address" / Int32ul,
+    "time_date_stamp" / Int32ul,
+    "forwarder_chain" / Int32ul,
+    "name_address" / Int32ul,
+    "import_address_table_address" / Int32ul,
+  )
+
+# Disclaimer: The 'seek' appears in the result.
+import_directory_entries = Seek(this._.start_address) >> RepeatUntil(
+    lambda obj, lst, ctx: obj.import_name_table_address == 0 and \
+        obj.time_date_stamp == 0 and obj.forwarder_chain == 0 and \
+        obj.name_address == 0 and obj.import_address_table_address == 0,
+    import_directory_entry)
+
+# An import lookup table is an array of 32-bit numbers for PE32 or an array of
+# 64-bit numbers for PE32+.
+#
+# This field is really a bit field.
+#  Ordinal vs Name flag
+#  Ordinal Number
+#  Hint/Name RVA (relative virtual address).
+import_lookup_table = RepeatUntil(lambda obj, lst, ctx: obj == 0,
+                                  pe32coff.plusfield)
+
+# import_lookup_table = RepeatUntil(lambda obj, lst, ctx: obj == 0,
+#     Construct(
+#         "value" / pe32coff.plusfield
+#         "is_symboltableindex" / Computed(this._linenumber == 0),
+#     )
+# )
+
+hint_name_table_entry = Struct(
+    "hint" / Int16ul,
+    "name" / CString("ascii"),
+  )
 
 
 def parse(filename):
@@ -144,6 +196,88 @@ def output_bitmaps(raw_data, resources, output_directory):
                 writer.write(entry_data)
 
 
+def imports(parsed_file, raw_data, verbose=True):
+    """Print out information about the imports."""
+
+    # This could potentially be refactored to be a generator similar to
+    # groupby() where you first iterate over the libraries (import entries)
+    # and then by the functions.
+
+    import_table = next(
+        directory
+        for directory in parsed_file.optionalheader.datadirectories
+        if directory.name == 'import_table')
+
+    try:
+        import_section = next(
+            section for section in parsed_file.sections
+            if section.name == '.idata')
+    except StopIteration:
+        # If there is no .idata section then it seems the imports are in the
+        # .rdata instead (citation needed).
+        import_section = next(
+            section for section in parsed_file.sections
+            if section.name == '.rdata')
+
+    def rva_to_file_offset(rva, section=import_section):
+        # For ski32.exe this is the identity file offset = rva.
+        return rva - section.virtual_address + section.rawdata_pointer
+
+    # If import_directory_entries had all the data, then it should be
+    # able to find the names however it starts at where the offset table
+    # is. Seems like could do:  start_address=
+
+    import_entries = import_directory_entries.parse(
+        raw_data,
+        start_address=rva_to_file_offset(import_table.virtualaddress),
+    )[1]
+    import_entries.pop()  # Remove the last sentinel item.
+
+    # The idea was to add name field to the entries which goes and looks it
+    # up. For now manually patch it in.
+    for entry in import_entries:
+        offset = rva_to_file_offset(entry.name_address)
+        entry.name = CString("ascii").parse(raw_data[offset:])
+
+    for entry in import_entries:
+        offset = rva_to_file_offset(entry.import_name_table_address)
+        table = import_lookup_table.parse(
+            raw_data[offset:],
+            signature=parsed_file.optionalheader.signature,
+        )
+        table.pop()  # Remove the last sentinel item.
+
+        print(entry.name)
+
+        if verbose:
+            # This essentially matches "dumpbin /import" output sans the
+            # whitespace being exact. There is an extra '0x40' at the start.
+            print(
+                f'{entry.import_address_table_address:>16X} Import Address Table'
+                f'\n{entry.import_name_table_address:>16X} Import Name Table'
+                f'\n{entry.time_date_stamp:>16} time date stamp'
+                f'\n{entry.forwarder_chain:>16} Index of first forwarder reference'
+                '\n'
+            )
+
+        def is_ordinal(field):
+            # TODO: Move this into import_lookup_table
+            if parsed_file.optionalheader.signature == 'PE32plus':
+                return row & 0x8000000000000000
+
+            return row & 0x80000000
+
+        for row in table:
+            if is_ordinal(row):
+                ordinal = row & 0xFFFF
+                print(f' ' * 16 + f' Ordinal {ordinal:>5}')
+            else:
+                offset = rva_to_file_offset(row)
+                name_entry = hint_name_table_entry.parse(raw_data[offset:])
+                print(f'{name_entry.hint:>16X} {name_entry.name}')
+        print()
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
@@ -159,3 +293,4 @@ if __name__ == '__main__':
             raw_data = reader.read()
 
         output_bitmaps(raw_data, resources, 'new_output')
+        imports(parsed_file, raw_data)
