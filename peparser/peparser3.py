@@ -126,6 +126,20 @@ hint_name_table_entry = Struct(
     "name" / CString("ascii"),
   )
 
+export_directory_table = Struct(
+    "export_flags" / Const(0, Int32ul),
+    "time_date_stamp" / Int32ul,
+    "major_version" / Int16ul,
+    "minor_version" / Int16ul,
+    "name_address" / Int32ul,
+    "ordinal_base" / Int32ul,
+    "address_table_count" / Int32ul,
+    "name_pointer_count" / Int32ul,
+    "address_table_address" / Int32ul, # RVA
+    "name_pointer_table_address" / Int32ul, # RVA
+    "ordinal_table_address" / Int32ul, # RVA
+)
+
 
 def parse(filename):
     with open(filename, 'rb') as reader:
@@ -278,13 +292,63 @@ def imports(parsed_file, raw_data, verbose=True):
         print()
 
 
+def exports(parsed_file, raw_data, verbose=True):
+    """Print out the exports in the executable."""
+
+    # Export table is typically in the .edata section.
+    export_table = next(
+        directory
+        for directory in parsed_file.optionalheader.datadirectories
+        if directory.name == 'export_table')
+
+    if export_table.size == 0:
+        print('No functions are exported from this executable.')
+        return
+
+    try:
+        export_section = next(
+            section for section in parsed_file.sections
+            if section.name == '.edata')
+    except StopIteration:
+        # If there is no .edata section then it seems the export are in the
+        # .rdata instead (citation needed).
+        export_section = next(
+            section for section in parsed_file.sections
+            if section.name == '.rdata')
+
+    def rva_to_file_offset(rva, section=export_section):
+        return rva - section.virtual_address + section.rawdata_pointer
+
+    table = export_directory_table.parse(
+        raw_data[rva_to_file_offset(export_table.virtualaddress):],
+    )
+
+    if verbose:
+        print(f'    {table.export_flags:08X} characteristics')
+        print(f'    {table.ordinal_base:08X} time date stamp')
+        print(f'    {table.major_version:5}.{table.minor_version:02} version')
+        print(f'    {table.ordinal_base:>8} ordinal base')
+        print(f'    {table.address_table_count:>8} number of functions')
+        print(f'    {table.name_pointer_count:>8} number of names')
+        print()
+        print('    ordinal hint RVA      name')
+        print()
+
+    print(table)
+
+
 if __name__ == '__main__':
     import argparse
+    # TODO: Set-up subcommands:  extract, imports, exports however
+    # it would be nice if you could do imports and exports at same time.
     parser = argparse.ArgumentParser(
         description='Extract images from a executable')
     parser.add_argument('executables', metavar='FILE', nargs='+',
                         help='an executable file to parse')
     args = parser.parse_args(['ski32.exe'])
+    #args = parser.parse_args([r'c:\Windows\System32\gdi32.dll'])
+    args = parser.parse_args([r'c:\Windows\System32\winmm.dll'])
+    #args = parser.parse_args([r'c:\Windows\SysWOW64\winmm.dll'])
 
     for exe in args.executables:
         parsed_file, resources = parse(exe)
@@ -292,5 +356,6 @@ if __name__ == '__main__':
         with open(exe, 'rb') as reader:
             raw_data = reader.read()
 
-        output_bitmaps(raw_data, resources, 'new_output')
+        #output_bitmaps(raw_data, resources, 'new_output')
         imports(parsed_file, raw_data)
+        #exports(parsed_file, raw_data)
