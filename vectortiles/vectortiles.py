@@ -21,6 +21,7 @@ __copyright__ = "Copyright (C) 2022 Sean Donnellan"
 __version__ = "0.2.0"
 
 import argparse
+import collections
 import enum
 import gzip
 import itertools
@@ -332,6 +333,40 @@ class DevelopmentTileVisitor(TileVisitor):
         return not (self.first_layer_only and self.layer_count > 2)
 
 
+class CounterVisitor(TileVisitor):
+    """Counts various things.
+
+    TODO: Add option to do this per-layer.
+    """
+
+    def __init__(self):
+        self.class_counter = collections.Counter()
+        self.geometry_type_counter = collections.Counter()
+
+    def enter_layer(self, *args):
+        pass
+
+    def leave_layer(self, *args):
+        pass
+
+    def feature(self, feature_type: int, attributes: dict, geometry):
+        self.geometry_type_counter[feature_type] += 1
+
+        feature_class = attributes.get('class', None)
+        if feature_class:
+            feature_class = feature_class.string_value
+            self.class_counter[feature_class] += 1
+
+    def print(self):
+        print('Class usage (top 15)')
+        for key, count in self.class_counter.most_common(15):
+            print(f'  {key:15} {count}')
+
+        print('Geometry type')
+        for key, count in self.geometry_type_counter.most_common():
+            print('  ', key, count)
+
+
 def process_tile(tile: vector_tile_pb2.Tile, visitor: TileVisitor):
     # TODO: This function is still a work in-progress. I haven't settled on how
     # I am planning on exposing the tile information.
@@ -377,12 +412,23 @@ if __name__ == '__main__':
         help='The path to the mbtiles file.',
         default=SOUTH_KOREA)
 
+    parser.add_argument(
+        '-c', '--count',
+        help='Count the usage of various things such as geometry type and '
+             'classes.',
+        action='store_true',
+    )
     # TODO: Add argument to specific the tile coordinates.
 
     arguments = parser.parse_args()
+
+    visitor = CounterVisitor() if arguments.count else DevelopmentTileVisitor()
 
     with MBTiles(arguments.mbtiles) as src:
         print(src.meta)
         assert src.meta['format'] == 'pbf'
         tile = src.tile(z=13, x=6987, y=5010)
-        process_tile(read_vector_tile(tile), DevelopmentTileVisitor())
+        process_tile(read_vector_tile(tile), visitor)
+
+    if arguments.count:
+        visitor.print()
