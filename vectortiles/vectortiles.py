@@ -21,6 +21,7 @@ __copyright__ = "Copyright (C) 2022 Sean Donnellan"
 __version__ = "0.2.0"
 
 import argparse
+import enum
 import gzip
 import itertools
 import os.path
@@ -63,6 +64,11 @@ Tile (0,0,0) has:
 GeometryType = vector_tile_pb2.Tile.GeomType
 GeometryType.__doc__ = "Enumeration that represents the type of geometry " + \
     "stored in a feature."""
+
+class CommandType(enum.IntEnum):
+    MOVE_TO = 1
+    LINE_TO = 2
+    CLOSE_PATH = 7
 
 
 class MBTiles:
@@ -187,7 +193,7 @@ def parse_geometry(geometry: list):
     #   then divided them into separate lists.
 
     class MoveToCommand:
-        command_id = 1
+        command_id = CommandType.MOVE_TO
         parameter_count = 2
 
         def __init__(self, dx, dy):
@@ -198,7 +204,7 @@ def parse_geometry(geometry: list):
             return f'MoveTo({self.dx}, {self.dy})'
 
     class LineToCommand:
-        command_id = 2
+        command_id = CommandType.LINE_TO
         parameter_count = 2
 
         def __init__(self, dx, dy):
@@ -209,7 +215,7 @@ def parse_geometry(geometry: list):
             return f'LineTo({self.dx}, {self.dy})'
 
     class ClosePathCommand:
-        command_id = 7
+        command_id = CommandType.CLOSE_PATH
         parameter_count = 0
 
         def __repr__(self):
@@ -243,7 +249,90 @@ def parse_geometry(geometry: list):
             yield command_type(*parameters)
 
 
-def process_tile(tile: vector_tile_pb2.Tile):
+class TileVisitor:
+    """Visit the various parts of a tile.
+
+    For each layer:
+        enter_layer()
+        for each feature:
+            feature()
+        leave_layer()
+
+    Layers are not nested so enter_layer() will not be called twice in a row.
+    """
+    def enter_layer(self, name: str, version: int, extent: int):
+        raise NotImplementedError()
+
+    def leave_layer(self, name: str):
+        raise NotImplementedError()
+
+    def feature(self, feature_type: int, attributes: dict, geometry):
+        raise NotImplementedError()
+
+
+class DevelopmentTileVisitor(TileVisitor):
+    """Visit tile and print information about the tile to standard output.
+
+    If first_layer_only is True, then it will only print information about the
+    first layer.
+    """
+
+    def __init__(self, first_layer_only=True):
+        super().__init__()
+        self.current_layer_name = None
+        self.first_layer_only = first_layer_only
+        self.layer_count = 0
+
+    def enter_layer(self, name: str, version: int, extent: int):
+        self.layer_count += 1
+        if self.should_print:
+            print(f'> {name} - v{version} (extent={extent}')
+        self.current_layer_name = name
+
+    def leave_layer(self, name: str):
+        assert self.current_layer_name == name
+        if self.should_print:
+            print(f'< {name}')
+
+    def feature(self, feature_type: int, attributes: dict, geometry):
+        if not self.should_print:
+            return
+
+        print(' > Feature')
+        if feature_type == GeometryType.POINT:
+            print('  Type: Point')
+        elif feature_type == GeometryType.POLYGON:
+            print('  Type: Polygon')
+        elif feature_type == GeometryType.LINESTRING:
+            print('  Type: Polyline')
+        else:
+            raise ValueError(f'Unexpected feature type: {feature_type}')
+
+        print('  Attributes:')
+        for k, value in attributes.items():
+            # TODO: Consider if process_tile() should be handling this.
+            if value.HasField('string_value'):
+                print('  ', k, ':', value.string_value)
+            else:
+                print('  ', k, ':', v)
+
+        print('  Geometry')
+        print('  ', list(geometry))
+
+        print(' < Feature')
+
+
+    @property
+    def should_print(self):
+        """True if information should be printed.
+
+        If first layer only is True and it is is no longer the first layer this
+        will be False.
+        """
+        return not (self.first_layer_only and self.layer_count > 2)
+
+
+def process_tile(tile: vector_tile_pb2.Tile, visitor: TileVisitor):
     # TODO: This function is still a work in-progress. I haven't settled on how
     # I am planning on exposing the tile information.
 
@@ -255,22 +344,9 @@ def process_tile(tile: vector_tile_pb2.Tile):
     # Example of keys and values:
     # key: class  value: lake (type: string)
     for layer in tile.layers:
-        print(f'{layer.name} - v{layer.version}')
-
-        # print(layer.keys)
-        # print(layer.values)
+        visitor.enter_layer(layer.name, layer.version, layer.extent)
 
         for feature in layer.features:
-            if feature.type == GeometryType.POINT:
-                print('Point')
-            elif feature.type == GeometryType.POLYGON:
-                print('Polygon')
-            elif feature.type == GeometryType.LINESTRING:
-                print('Polyline')
-            else:
-                raise ValueError(f'Unexpected feature type: {feature.type}')
-
-            geometry = parse_geometry(feature.geometry)
 
             # feature.tags refers to the dictionary (keys/values) in the layer.
             #
@@ -278,12 +354,15 @@ def process_tile(tile: vector_tile_pb2.Tile):
             #
             # A value could be JSON value but with five numerical types instead
             # of one.
-            # TODO: Handle the feature tags.
+            attributes = {
+                layer.keys[k]: layer.values[v]
+                for k, v in pairwise(feature.tags)
+            }
 
-            for k, v in pairwise(feature.tags):
-                print('key:', layer.keys[k], 'value:', layer.values[v])
+            geometry = parse_geometry(feature.geometry)
+            visitor.feature(feature.type, attributes, geometry)
 
-        break
+        visitor.leave_layer(layer.name)
 
 if __name__ == '__main__':
     # A hardcoded default to make developing easier for myself.
@@ -298,10 +377,12 @@ if __name__ == '__main__':
         help='The path to the mbtiles file.',
         default=SOUTH_KOREA)
 
+    # TODO: Add argument to specific the tile coordinates.
+
     arguments = parser.parse_args()
 
     with MBTiles(arguments.mbtiles) as src:
         print(src.meta)
         assert src.meta['format'] == 'pbf'
         tile = src.tile(z=13, x=6987, y=5010)
-        process_tile(read_vector_tile(tile))
+        process_tile(read_vector_tile(tile), DevelopmentTileVisitor())
