@@ -77,7 +77,7 @@ def write_level_to_image(level, plane, filename):
 
 
 def read_keen_map_header(executable_path):
-    """Read the MAPHEAD for Commader Keen from the executable itself.
+    """Read the MAPHEAD for Commander Keen from the executable itself.
 
     Unlike for Wolfenstein 3-D the MAPHEAD is stored within the executable.
 
