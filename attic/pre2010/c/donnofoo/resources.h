@@ -1,0 +1,9 @@
+#define IDR_MYMENU 101
+#define IDI_MYICON 201
+
+#define ID_FILE_EXIT 9001
+#define ID_STUFF_GO 9002
+#define ID_HELP_ABOUT 9009
+
+#define IDC_MAIN_EDIT   301
+#define IDC_MAIN_BUTTON 302
