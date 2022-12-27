@@ -117,8 +117,8 @@ def filter_misses(positional_misses, does_not_exists):
 
 
 def filtered_words(words: WordList, *filters):
-    return [word for word in words
-            if all(matcher(word) for matcher in filters)]
+    return sorted([word for word in words
+            if all(matcher(word) for matcher in filters)])
 
 
 class FilterTest(unittest.TestCase):
@@ -378,7 +378,6 @@ def choose_best_word(words: WordList):
     matches = lambda word: any(letter in common_letters for letter in word)
     always_true = lambda word: True
 
-
     def by_common_letter(word):
         # Ignore doubles or triples of the same letter as that hurts the
         # chances of eliminating the most letters at once. This is achieved by
@@ -396,20 +395,68 @@ def filter_words_with_duplicates(word):
     return len(set(word)) == len(word)
 
 
-def report(words: WordList, matches, missing_matches):
+def letters_in_words(words):
+    """Yield each letter in the words.
+
+    This is useful for passing to a collection.Counter()"""
+    for word in words:
+        yield from word
+
+
+def determine_required_letters_from_words(words: list):
+    """Determine what letters must be required in the word based on checking
+    what letters existing in all of the given words.
+
+    words must not contain words with duplicate letters as this algorithm
+    doesn't handle that."""
+
+
+    # Letters where the count = len(candidates_without_dupes) are the required
+    # letters.
+    counter = collections.Counter(letters_in_words(words))
+    required_letters = [letter for letter, count in counter.items()
+                        if count == len(words)]
+    return required_letters
+
+def report(words: WordList, matches, missing_matches,
+           with_untried_summary=False):
     candidates_with_dupes = filtered_words(words, matches, missing_matches)
     candidates_without_dupes = filtered_words(
         candidates_with_dupes, filter_words_with_duplicates)
 
     if candidates_without_dupes:
-        print(f'Candinates (no duplicates)')
+        print(f'candidates (no duplicates)')
         print('  ' + '\n  '.join(candidates_without_dupes))
         if len(candidates_without_dupes) < 5:
-            print('Candinates (with duplicates)')
+            print('candidates (with duplicates)')
             print('  ' + '\n  '.join(candidates_with_dupes))
     else:
-        print('Candinates (with duplicates)')
+        print('candidates (with duplicates)')
         print('  ' + '\n  '.join(candidates_with_dupes))
+
+    def remove_letters(word, required_letters):
+        return ''.join(letter for letter in word
+                       if letter not in required_letters)
+
+    # As the filters are transparent what letters are required needs to be
+    # deduced. These letters should appear in every candindate.
+    required_letters = determine_required_letters_from_words(
+        candidates_without_dupes)
+
+    print(required_letters)
+    candindates_without_required_letters = [
+        remove_letters(word, required_letters)
+        for word in candidates_without_dupes
+        ]
+
+    if with_untried_summary:
+        untried_letters = collections.Counter(
+            letters_in_words(candindates_without_required_letters))
+
+        print('Untried letters in candidates')
+        print('  ' + '\n  '.join(
+                f'{v} {k}' for k, v in untried_letters.most_common(28)))
+        print('Find words with the most common set of letters')
 
 
 def jan3(words: WordList):
