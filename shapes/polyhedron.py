@@ -114,10 +114,16 @@ def parse_recipe(recipe):
             if n_or_op.isdigit():
                 n = int(n_or_op) * 10 + int(n)
                 n_or_op = next(characters)  # Handles C40
+        else:
+            n = None
 
-            return Operation(n_or_op, n)
+        op_code = n_or_op
+        if op_code not in Operation.op_code_to_name:
+            raise ValueError(
+                f'Invalid operation {op_code} must be one of ' +
+                f'{set(Operation.op_code_to_name.keys())}.')
 
-        return Operation(n_or_op)
+        return Operation(op_code, n)
 
     def token_base(characters):
         n_or_type = next(characters)
