@@ -1,0 +1,84 @@
+<svg version="1.1" baseProfile="full"
+     xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:ev="http://www.w3.org/2001/xml-events">
+    <g stroke="green" >
+        <line style="stroke: black" x1="64" y1="64" x2="192" y2="192" />
+        <line style="stroke: black" x1="192" y1="64" x2="320" y2="192" />
+        <line style="stroke: black" x1="320" y1="64" x2="320" y2="192" />
+        <line style="stroke: black" x1="448" y1="64" x2="448" y2="192" />
+        <line style="stroke: black" x1="448" y1="64" x2="320" y2="192" />
+        <line style="stroke: black" x1="64" y1="192" x2="192" y2="320" />
+        <line style="stroke: black" x1="64" y1="192" x2="64" y2="320" />
+        <line style="stroke: black" x1="192" y1="192" x2="320" y2="192" />
+        <line style="stroke: black" x1="192" y1="192" x2="320" y2="320" />
+        <line style="stroke: black" x1="192" y1="192" x2="64" y2="64" />
+        <line style="stroke: black" x1="320" y1="192" x2="320" y2="64" />
+        <line style="stroke: black" x1="320" y1="192" x2="448" y2="64" />
+        <line style="stroke: black" x1="320" y1="192" x2="448" y2="192" />
+        <line style="stroke: black" x1="320" y1="192" x2="448" y2="320" />
+        <line style="stroke: black" x1="320" y1="192" x2="320" y2="320" />
+        <line style="stroke: black" x1="320" y1="192" x2="192" y2="320" />
+        <line style="stroke: black" x1="320" y1="192" x2="192" y2="192" />
+        <line style="stroke: black" x1="320" y1="192" x2="192" y2="64" />
+        <line style="stroke: black" x1="448" y1="192" x2="448" y2="64" />
+        <line style="stroke: black" x1="448" y1="192" x2="448" y2="320" />
+        <line style="stroke: black" x1="448" y1="192" x2="320" y2="320" />
+        <line style="stroke: black" x1="448" y1="192" x2="320" y2="192" />
+        <line style="stroke: black" x1="64" y1="320" x2="64" y2="192" />
+        <line style="stroke: black" x1="64" y1="320" x2="192" y2="320" />
+        <line style="stroke: black" x1="64" y1="320" x2="64" y2="448" />
+        <line style="stroke: black" x1="192" y1="320" x2="320" y2="192" />
+        <line style="stroke: black" x1="192" y1="320" x2="320" y2="320" />
+        <line style="stroke: black" x1="192" y1="320" x2="64" y2="448" />
+        <line style="stroke: black" x1="192" y1="320" x2="64" y2="320" />
+        <line style="stroke: black" x1="192" y1="320" x2="64" y2="192" />
+        <line style="stroke: black" x1="320" y1="320" x2="320" y2="192" />
+        <line style="stroke: black" x1="320" y1="320" x2="448" y2="192" />
+        <line style="stroke: black" x1="320" y1="320" x2="448" y2="320" />
+        <line style="stroke: black" x1="320" y1="320" x2="448" y2="448" />
+        <line style="stroke: black" x1="320" y1="320" x2="320" y2="448" />
+        <line style="stroke: black" x1="320" y1="320" x2="192" y2="448" />
+        <line style="stroke: black" x1="320" y1="320" x2="192" y2="320" />
+        <line style="stroke: black" x1="320" y1="320" x2="192" y2="192" />
+        <line style="stroke: black" x1="448" y1="320" x2="448" y2="192" />
+        <line style="stroke: black" x1="448" y1="320" x2="320" y2="320" />
+        <line style="stroke: black" x1="448" y1="320" x2="320" y2="192" />
+        <line style="stroke: black" x1="64" y1="448" x2="64" y2="320" />
+        <line style="stroke: black" x1="64" y1="448" x2="192" y2="320" />
+        <line style="stroke: black" x1="192" y1="448" x2="320" y2="320" />
+        <line style="stroke: black" x1="320" y1="448" x2="320" y2="320" />
+        <line style="stroke: black" x1="320" y1="448" x2="448" y2="448" />
+        <line style="stroke: black" x1="448" y1="448" x2="320" y2="448" />
+        <line style="stroke: black" x1="448" y1="448" x2="320" y2="320" />
+    </g>
+    <g>
+        <polygon fill="red" points="64,32 32,96 96,96 " />
+        <polygon style="fill: #ac707a" points="64,48 48,86 80,86" />
+        <rect x="160" y="32" width="64" height="64"/>
+        <rect x="176" y="48" width="32" height="32" style="fill: gray"/>
+        <polygon fill="orange" points="288,64 320,32 352,64 320,96" />
+        <polygon style="fill: #815b3a" points="304,64 320,48 336,64 320,80" />
+        <rect x="416" y="32" width="64" height="64"/>
+        <polygon fill="orange" points="32,192 64,160 96,192 64,224" />
+        <polygon fill="red" points="192,160 160,224 224,224 " />
+        <polygon fill="green" points="288,181 309,160 332,160 352,181 352,204 332,224 309,224 288,204 " />
+        <circle cx="309" cy="192" r="8" />
+        <circle cx="331" cy="192" r="8" />
+        <rect x="416" y="160" width="64" height="64"/>
+        <polygon fill="orange" points="32,320 64,288 96,320 64,352" />
+        <polygon fill="orange" points="160,320 192,288 224,320 192,352" />
+        <polygon fill="green" points="288,309 309,288 332,288 352,309 352,332 332,352 309,352 288,332 " />
+        <circle cx="320" cy="309" r="8" />
+        <circle cx="309" cy="330" r="8" />
+        <circle cx="331" cy="330" r="8" />
+        <rect x="416" y="288" width="64" height="64"/>
+        <polygon fill="orange" points="32,448 64,416 96,448 64,480" />
+        <polygon style="fill: #815b3a" points="48,448 64,432 80,448 64,464" />
+        <rect x="160" y="416" width="64" height="64"/>
+        <rect x="176" y="432" width="32" height="32" style="fill: gray"/>
+        <polygon fill="red" points="320,416 288,480 352,480 " />
+        <polygon fill="red" points="448,416 416,480 480,480 " />
+        <polygon style="fill: #ac707a" points="448,432 432,470 464,470" />
+    </g>
+</svg>
