@@ -1,0 +1,5 @@
+[{
+	"directory": "build",
+	"command": "clang++ std=c++14 -Wall -Wextra -Wignored-attributes -fms-compatibility-version=19 -fcxx-exceptions -c -o build/shell/Debug/buddy_clang.o buddy.cpp",
+	"file": "../buddy.cpp"
+}]
