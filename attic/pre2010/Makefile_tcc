@@ -1,0 +1,169 @@
+CC=tcc
+CFLAGS=-c -I.
+LIBS=-llibgobject-2.0 -llibglib-2.0
+
+CCCODE:=valaccodeassignment.o valaccodebinaryexpression.o valaccodeblock.o valaccodebreakstatement.o valaccodecasestatement.o valaccodecastexpression.o valaccodecommaexpression.o valaccodecomment.o valaccodeconditionalexpression.o valaccodeconstant.o valaccodecontinuestatement.o valaccodedeclaration.o valaccodedeclarator.o valaccodedostatement.o valaccodeelementaccess.o valaccodeemptystatement.o valaccodeenum.o valaccodeenumvalue.o valaccodeexpression.o valaccodeexpressionstatement.o valaccodeformalparameter.o valaccodeforstatement.o valaccodefragment.o valaccodefunction.o valaccodefunctioncall.o valaccodefunctiondeclarator.o valaccodegotostatement.o valaccodeidentifier.o valaccodeifstatement.o valaccodeincludedirective.o valaccodeinitializerlist.o valaccodelabel.o valaccodelinedirective.o valaccodemacroreplacement.o valaccodememberaccess.o valaccodemodifiers.o valaccodenewline.o valaccodenode.o valaccodeoncesection.o valaccodeparenthesizedexpression.o valaccodereturnstatement.o valaccodestatement.o valaccodestruct.o valaccodeswitchstatement.o valaccodetypedefinition.o valaccodeunaryexpression.o valaccodevariabledeclarator.o valaccodewhilestatement.o valaccodewriter.o 
+CCCODE_FULL:= $(patsubst %.o, ccode/%.o, $(CCCODE))
+
+VAPIGEN_OBJS:=vapigen/valagidlparser.o  
+#vapigen/valavapigen.o
+#vapigen/valavapicheck.c
+
+.SUFFIXES : .c .o
+.PHONY: build-ccode
+
+build-ccode: $(CCCODE_FULL) $(VAPIGEN_OBJS)
+
+build: build-gee build-vala build-ccode build-compiler 
+
+%.o:        %.c
+	$(CC) $(CFLAGS) $< -o $@
+
+
+
+
+build-gee:
+	$(CC) $(CFLAGS) gee/arraylist.c
+	$(CC) $(CFLAGS) gee/collection.c
+	$(CC) $(CFLAGS) gee/hashmap.c
+	$(CC) $(CFLAGS) gee/hashset.c
+	$(CC) $(CFLAGS) gee/iterable.c
+	$(CC) $(CFLAGS) gee/iterator.c
+	$(CC) $(CFLAGS) gee/list.c
+	$(CC) $(CFLAGS) gee/map.c
+	$(CC) $(CFLAGS) gee/readonlycollection.c
+	$(CC) $(CFLAGS) gee/readonlylist.c
+	$(CC) $(CFLAGS) gee/readonlymap.c
+	$(CC) $(CFLAGS) gee/readonlyset.c
+	$(CC) $(CFLAGS) gee/set.c
+
+build-vala:
+	$(CC) $(CFLAGS) vala/valaaddressofexpression.c
+	$(CC) $(CFLAGS) vala/valaarraycreationexpression.c
+	$(CC) $(CFLAGS) vala/valaarraylengthfield.c
+	$(CC) $(CFLAGS) vala/valaarraymovemethod.c
+	$(CC) $(CFLAGS) vala/valaarrayresizemethod.c
+	$(CC) $(CFLAGS) vala/valaarraytype.c
+	$(CC) $(CFLAGS) vala/valaassignment.c
+	$(CC) $(CFLAGS) vala/valaattribute.c
+	$(CC) $(CFLAGS) vala/valaattributeprocessor.c
+	$(CC) $(CFLAGS) vala/valabaseaccess.c
+	$(CC) $(CFLAGS) vala/valabasicblock.c
+	$(CC) $(CFLAGS) vala/valabinaryexpression.c
+	$(CC) $(CFLAGS) vala/valablock.c
+	$(CC) $(CFLAGS) vala/valabooleanliteral.c
+	$(CC) $(CFLAGS) vala/valabreakstatement.c
+	$(CC) $(CFLAGS) vala/valacastexpression.c
+	$(CC) $(CFLAGS) vala/valacatchclause.c
+	$(CC) $(CFLAGS) vala/valacfgbuilder.c
+	$(CC) $(CFLAGS) vala/valacharacterliteral.c
+	$(CC) $(CFLAGS) vala/valaclass.c
+	$(CC) $(CFLAGS) vala/valaclasstype.c
+	$(CC) $(CFLAGS) vala/valacodebinding.c
+	$(CC) $(CFLAGS) vala/valacodecontext.c
+	$(CC) $(CFLAGS) vala/valacodegenerator.c
+	$(CC) $(CFLAGS) vala/valacodenode.c
+	$(CC) $(CFLAGS) vala/valacodevisitor.c
+	$(CC) $(CFLAGS) vala/valaconditionalexpression.c
+	$(CC) $(CFLAGS) vala/valaconstant.c
+	$(CC) $(CFLAGS) vala/valaconstructor.c
+	$(CC) $(CFLAGS) vala/valacontinuestatement.c
+	$(CC) $(CFLAGS) vala/valacreationmethod.c
+	$(CC) $(CFLAGS) vala/valadatatype.c
+	$(CC) $(CFLAGS) vala/valadeclarationstatement.c
+	$(CC) $(CFLAGS) vala/valadelegate.c
+	$(CC) $(CFLAGS) vala/valadelegatetype.c
+	$(CC) $(CFLAGS) vala/valadeletestatement.c
+	$(CC) $(CFLAGS) vala/valadestructor.c
+	$(CC) $(CFLAGS) vala/valadostatement.c
+	$(CC) $(CFLAGS) vala/valadynamicmethod.c
+	$(CC) $(CFLAGS) vala/valadynamicsignal.c
+	$(CC) $(CFLAGS) vala/valaelementaccess.c
+	$(CC) $(CFLAGS) vala/valaemptystatement.c
+	$(CC) $(CFLAGS) vala/valaenum.c
+	$(CC) $(CFLAGS) vala/valaenumvalue.c
+	$(CC) $(CFLAGS) vala/valaerrorcode.c
+	$(CC) $(CFLAGS) vala/valaerrordomain.c
+	$(CC) $(CFLAGS) vala/valaerrortype.c
+	$(CC) $(CFLAGS) vala/valaexpression.c
+	$(CC) $(CFLAGS) vala/valaexpressionstatement.c
+	$(CC) $(CFLAGS) vala/valafield.c
+	$(CC) $(CFLAGS) vala/valaforeachstatement.c
+	$(CC) $(CFLAGS) vala/valaformalparameter.c
+	$(CC) $(CFLAGS) vala/valaforstatement.c
+	$(CC) $(CFLAGS) vala/valaifstatement.c
+	$(CC) $(CFLAGS) vala/valainitializerlist.c
+	$(CC) $(CFLAGS) vala/valainstancecast.c
+	$(CC) $(CFLAGS) vala/valaintegerliteral.c
+	$(CC) $(CFLAGS) vala/valaintegertype.c
+	$(CC) $(CFLAGS) vala/valainterface.c
+	$(CC) $(CFLAGS) vala/valainterfacetype.c
+	$(CC) $(CFLAGS) vala/valainterfacewriter.c
+	$(CC) $(CFLAGS) vala/valainvalidtype.c
+	$(CC) $(CFLAGS) vala/valainvocationexpression.c
+	$(CC) $(CFLAGS) vala/valalambdaexpression.c
+	$(CC) $(CFLAGS) vala/valaliteral.c
+	$(CC) $(CFLAGS) vala/valalocalvariable.c
+	$(CC) $(CFLAGS) vala/valalockable.c
+	$(CC) $(CFLAGS) vala/valalockstatement.c
+	$(CC) $(CFLAGS) vala/valamember.c
+	$(CC) $(CFLAGS) vala/valamemberaccess.c
+	$(CC) $(CFLAGS) vala/valamemberinitializer.c
+	$(CC) $(CFLAGS) vala/valamemorymanager.c
+	$(CC) $(CFLAGS) vala/valamethod.c
+	$(CC) $(CFLAGS) vala/valamethodtype.c
+	$(CC) $(CFLAGS) vala/valanamedargument.c
+	$(CC) $(CFLAGS) vala/valanamespace.c
+	$(CC) $(CFLAGS) vala/valanamespacereference.c
+	$(CC) $(CFLAGS) vala/valanullchecker.c
+	$(CC) $(CFLAGS) vala/valanullliteral.c
+	$(CC) $(CFLAGS) vala/valanulltype.c
+	$(CC) $(CFLAGS) vala/valaobjectcreationexpression.c
+	$(CC) $(CFLAGS) vala/valaparenthesizedexpression.c
+	$(CC) $(CFLAGS) vala/valaparser.c
+	$(CC) $(CFLAGS) vala/valapointerindirection.c
+	$(CC) $(CFLAGS) vala/valapointertype.c
+	$(CC) $(CFLAGS) vala/valapostfixexpression.c
+	$(CC) $(CFLAGS) vala/valaproperty.c
+	$(CC) $(CFLAGS) vala/valapropertyaccessor.c
+	$(CC) $(CFLAGS) vala/valarealliteral.c
+	$(CC) $(CFLAGS) vala/valareferencetransferexpression.c
+	$(CC) $(CFLAGS) vala/valareferencetype.c
+	$(CC) $(CFLAGS) vala/valareport.c
+	$(CC) $(CFLAGS) vala/valareturnstatement.c
+	$(CC) $(CFLAGS) vala/valascanner.c
+	$(CC) $(CFLAGS) vala/valascope.c
+	$(CC) $(CFLAGS) vala/valasemanticanalyzer.c
+	$(CC) $(CFLAGS) vala/valasignal.c
+	$(CC) $(CFLAGS) vala/valasignaltype.c
+	$(CC) $(CFLAGS) vala/valasizeofexpression.c
+	$(CC) $(CFLAGS) vala/valasourcefile.c
+	$(CC) $(CFLAGS) vala/valasourcefilecycle.c
+	$(CC) $(CFLAGS) vala/valasourcelocation.c
+	$(CC) $(CFLAGS) vala/valasourcereference.c
+	$(CC) $(CFLAGS) vala/valastatement.c
+	$(CC) $(CFLAGS) vala/valastringliteral.c
+	$(CC) $(CFLAGS) vala/valastruct.c
+	$(CC) $(CFLAGS) vala/valaswitchlabel.c
+	$(CC) $(CFLAGS) vala/valaswitchsection.c
+	$(CC) $(CFLAGS) vala/valaswitchstatement.c
+	$(CC) $(CFLAGS) vala/valasymbol.c
+	$(CC) $(CFLAGS) vala/valasymbolresolver.c
+	$(CC) $(CFLAGS) vala/valathrowstatement.c
+	$(CC) $(CFLAGS) vala/valatokentype.c
+	$(CC) $(CFLAGS) vala/valatrystatement.c
+	$(CC) $(CFLAGS) vala/valatuple.c
+	$(CC) $(CFLAGS) vala/valatypecheck.c
+	$(CC) $(CFLAGS) vala/valatypeofexpression.c
+	$(CC) $(CFLAGS) vala/valatypeparameter.c
+	$(CC) $(CFLAGS) vala/valatypeparametertype.c
+	$(CC) $(CFLAGS) vala/valatypesymbol.c
+	$(CC) $(CFLAGS) vala/valaunaryexpression.c
+	$(CC) $(CFLAGS) vala/valaunresolvedsymbol.c
+	$(CC) $(CFLAGS) vala/valaunresolvedtype.c
+	$(CC) $(CFLAGS) vala/valavaluetype.c
+	$(CC) $(CFLAGS) vala/valavoidtype.c
+	$(CC) $(CFLAGS) vala/valawhilestatement.c
+
+build-compiler:
+	$(CC) $(LIBS) compiler/valacompiler.c -I. valaaddressofexpression.o valaarraycreationexpression.o valaarraylengthfield.o valaarraymovemethod.o valaarrayresizemethod.o valaarraytype.o valaassignment.o valaattribute.o valaattributeprocessor.o valabaseaccess.o valabasicblock.o valabinaryexpression.o valablock.o valabooleanliteral.o valabreakstatement.o valacastexpression.o valacatchclause.o valacfgbuilder.o valacharacterliteral.o valaclass.o valaclasstype.o valacodebinding.o valacodecontext.o valacodegenerator.o valacodenode.o valacodevisitor.o valaconditionalexpression.o valaconstant.o valaconstructor.o valacontinuestatement.o valacreationmethod.o valadatatype.o valadeclarationstatement.o valadelegate.o valadelegatetype.o valadeletestatement.o valadestructor.o valadostatement.o valadynamicmethod.o valadynamicsignal.o valaelementaccess.o valaemptystatement.o valaenum.o valaenumvalue.o valaerrorcode.o valaerrordomain.o valaerrortype.o valaexpression.o valaexpressionstatement.o valafield.o valaforeachstatement.o valaformalparameter.o valaforstatement.o valaifstatement.o valainitializerlist.o valainstancecast.o valaintegerliteral.o valaintegertype.o valainterface.o valainterfacetype.o valainterfacewriter.o valainvalidtype.o valainvocationexpression.o valalambdaexpression.o valaliteral.o valalocalvariable.o valalockable.o valalockstatement.o valamember.o valamemberaccess.o valamemberinitializer.o valamemorymanager.o valamethod.o valamethodtype.o valanamedargument.o valanamespace.o valanamespacereference.o valanullchecker.o valanullliteral.o valanulltype.o valaobjectcreationexpression.o valaparenthesizedexpression.o valaparser.o valapointerindirection.o valapointertype.o valapostfixexpression.o valaproperty.o valapropertyaccessor.o valarealliteral.o valareferencetransferexpression.o valareferencetype.o valareport.o valareturnstatement.o valascanner.o valascope.o valasemanticanalyzer.o valasignal.o valasignaltype.o valasizeofexpression.o valasourcefile.o valasourcefilecycle.o valasourcelocation.o valasourcereference.o valastatement.o valastringliteral.o valastruct.o valaswitchlabel.o valaswitchsection.o valaswitchstatement.o valasymbol.o valasymbolresolver.o valathrowstatement.o valatokentype.o valatrystatement.o valatuple.o valatypecheck.o valatypeofexpression.o valatypeparameter.o valatypeparametertype.o valatypesymbol.o valaunaryexpression.o valaunresolvedsymbol.o valaunresolvedtype.o valavaluetype.o valavoidtype.o valawhilestatement.o arraylist.o collection.o hashmap.o hashset.o iterable.o iterator.o list.o map.o readonlycollection.o readonlylist.o readonlymap.o readonlyset.o set.o $(CCCODE) $(VAPIGEN_OBJS)
