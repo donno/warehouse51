@@ -428,7 +428,10 @@ if __name__ == '__main__':
         print(src.meta)
         assert src.meta['format'] == 'pbf'
         tile = src.tile(z=13, x=6987, y=5010)
-        process_tile(read_vector_tile(tile), visitor)
+        if tile:
+            process_tile(read_vector_tile(tile), visitor)
+        else:
+            raise ValueError('Tile not found')
 
     if arguments.count:
         visitor.print()
