@@ -116,23 +116,59 @@ namespace
 template<typename TYPE>
 std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
 {
+#if defined(__GLIBCXX__) && __GLIBCXX__ == 20190406
+    // This version of libstd++ doesn't have a std::from_chars() that works
+    // with floating-point.
+    constexpr bool hasFromChars = !std::is_floating_point_v<TYPE>;
+#else
+    // Assume we have std::from_chars() which accepts a float for other
+    // standard libraries and versions.
+    constexpr bool hasFromChars = true;
+#endif
+
     // This tag is ASCII string if it is set.
     const char* stringValue;
     if (TIFFGetField(Tiff, GDAL_NODATA, &stringValue) == 1)
     {
         // The tag exists now parse it.
         TYPE value;
-        if (auto [source, errorCode] = std::from_chars(
-                stringValue, stringValue + std::strlen(stringValue), value);
-            errorCode == std::errc())
+        if constexpr (hasFromChars)
         {
-            return std::make_optional(value);
+            if (auto [source, errorCode] = std::from_chars(
+                    stringValue, stringValue + std::strlen(stringValue), value);
+                errorCode == std::errc())
+            {
+                return std::make_optional(value);
+            }
+            else
+            {
+                fprintf(stderr,
+                        "Warning: Unable to read string as no data value: "
+                        "%s\n",
+                        source);
+            }
         }
-        else
+        else if constexpr (std::is_floating_point_v<TYPE>)
         {
+            char* end = nullptr;
+            if constexpr (std::is_same_v<TYPE, float>)
+            {
+                value = std::strtof(stringValue, &end);
+            }
+            else
+            {
+                static_assert(std::is_same_v<TYPE, double>);
+                value = std::strtod(stringValue, &end);
+            }
+
+            if (stringValue != end )
+            {
+                return std::make_optional(value);
+            }
+
             fprintf(stderr,
                     "Warning: Unable to read string as no data value: %s\n",
-                    source);
+                    stringValue);
         }
     }
 
