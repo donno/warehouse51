@@ -1,0 +1,27 @@
+# An nmake Makefile for building render-mapnik
+# Build from "x64 Native Tools Command Prompt for VS 2022" using:
+#  nmake -f Makefile.msvc
+
+# Variables
+cxx=cl
+link=link
+vcpkg_include=d:\vcs\vcpkg\installed\x64-windows\include
+vcpkg_lib=d:\vcs\vcpkg\installed\x64-windows\lib
+cxxflags=/nologo /EHsc /std:c++17 /Zi /O2 /c /I $(vcpkg_include)
+libs=$(vcpkg_lib)/libmapnik.lib $(vcpkg_lib)/boost_program_options-vc140-mt.lib 
+
+# Targets
+all: bin/render-mapnik.exe
+
+render-mapnik.cpp:
+  $(cc) $(cdebug) $(cflags) $(cvars) $*.cpp
+
+render-mapnik.obj: render-mapnik.cpp
+  $(cxx) $(cdebug) $(cxxflags) $(cvars) /Fo:render-mapnik.obj render-mapnik.cpp
+
+bin\render-mapnik.exe bin\render-mapnik.pdb: render-mapnik.obj
+  $(link) /nologo /debug /PDB:bin\render-mapnik.pdb render-mapnik.obj -out:bin\render-mapnik.exe $(libs)
+
+run: bin\render-mapnik.exe
+    cd bin
+    render-mapnik.exe --map-file G:\GeoData\Code\openstreetmap-carto\osm_carto_windows.xml --fonts G:\GeoData\Code\fonts

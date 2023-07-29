@@ -13,11 +13,8 @@
 // Building on Linux:
 // g++ -I ~/mapnik/include/  render-mapnik.cpp ~/mapnik/build/out/libmapnik.so.4.0.0 -lboost_program_options
 //
-// Build on Windows (WIP):
-// cl /nologo /EHsc /std:c++17 /Zi /c render-mapnik.cpp /I d:\vcs\vcpkg\installed\x64-windows\include
-// cl /nologo render-mapnik.obj d:\vcs\vcpkg\installed\x64-windows\lib\libmapnik.lib d:\vcs\vcpkg\installed\x64-windows\lib\boost_program_options-vc140-mt.lib  /link /debug /out:bin\render-mapnik.exe
-// cd bin
-// .\render-mapnik.exe --map-file G:\GeoData\Code\openstreetmap-carto\osm-mapnik.xml --fonts G:\GeoData\Code\fonts
+// Build on Windows: Use nmake -f Makefile.msvc
+// Others will need to tweak the paths to vcpkg.
 
 #include <mapnik/map.hpp>
 #include <mapnik/mapnik.hpp>
