@@ -2,13 +2,16 @@
 
 This requires the skia-python package: https://pypi.org/project/skia-python/
 
-
 Known issues:
 - Doesn't handle points
 - Doesn't handle styling - some very basic stuff has been added but is off at
   the moment.
   Possibly look at doing something inspired by https://github.com/mapbox/carto/
   If there is a Python package that handles this already that would be great.
+
+Alternative:
+    mbgl-render from https://github.com/maplibre/maplibre-native/
+
 """
 
 import argparse
