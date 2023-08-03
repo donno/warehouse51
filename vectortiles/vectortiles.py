@@ -25,6 +25,7 @@ import collections
 import enum
 import gzip
 import itertools
+import math
 import os.path
 import sqlite3
 import vector_tile_pb2
@@ -398,6 +399,31 @@ def process_tile(tile: vector_tile_pb2.Tile, visitor: TileVisitor):
             visitor.feature(feature.type, attributes, geometry)
 
         visitor.leave_layer(layer.name)
+
+
+def wgs84_to_tile_index(latitude_in_degrees, longitude_in_degrees, zoom):
+    """Convert WGS84 coordinates (latitude and longitude) to tile index.
+
+    Parameters
+    ----------
+    latitude_in_degrees
+        The tile's x-coordinate
+    longitude_in_degrees
+        The tile's y-coordinate
+    zoom
+        The zoom level
+
+    Returns
+    -------
+    dict
+        x, y z for the tile's x-coordinate, y-coordinate and zoom level.
+    """
+    latitude = math.radians(latitude_in_degrees)
+    n = 2.0 ** zoom
+    x_index = int((longitude_in_degrees + 180.0) / 360.0 * n)
+    y_index = int((1.0 - math.asinh(math.tan(latitude)) / math.pi) / 2.0 * n)
+    return {'x': x_index, 'y': y_index, 'z': zoom}
+
 
 if __name__ == '__main__':
     # A hardcoded default to make developing easier for myself.
