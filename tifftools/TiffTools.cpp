@@ -292,21 +292,17 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
 
     const auto bitsPerSample = metadata.bitsPerSample;
 
-    std::optional<float> noDataValueFloat;
-    std::optional<double> noDataValueDouble;
-    std::optional<int16> noDataValueInt;
-    std::optional<uint16> noDataValueUnsignedInt;
     if (metadata.sampleFormat == SAMPLEFORMAT_IEEEFP)
     {
         printf("Samples are in IEEE floating point format with %d bits per "
                "sample.\n", bitsPerSample);
         if (bitsPerSample == 32)
         {
-            noDataValueFloat = local::NoDataValue<float>(Tiff);
+            metadata.noDataValueFloat = local::NoDataValue<float>(Tiff);
         }
         else if (bitsPerSample == 64)
         {
-            noDataValueDouble = local::NoDataValue<double>(Tiff);
+            metadata.noDataValueDouble = local::NoDataValue<double>(Tiff);
         }
         else
         {
@@ -320,7 +316,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            noDataValueInt = local::NoDataValue<int16>(Tiff);
+            metadata.noDataValueInt = local::NoDataValue<int16>(Tiff);
         }
         else
         {
@@ -334,7 +330,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            noDataValueInt = local::NoDataValue<uint16>(Tiff);
+            metadata.noDataValueInt = local::NoDataValue<uint16>(Tiff);
         }
         else
         {
@@ -363,7 +359,7 @@ void local::ReadTile(
     Importer->BeginTile(
         Point2D{ LowerLeft.x + X * cellSize.x,
                  LowerLeft.y + Y * cellSize.y },
-        Point2D{ LowerLeft.x + (X + Metadata.tileWidth -1) * cellSize.x,
+        Point2D{ LowerLeft.x + (X + Metadata.tileWidth - 1) * cellSize.x,
                  LowerLeft.y + (Y + Metadata.tileLength - 1) * cellSize.y },
         cellSize);
 
