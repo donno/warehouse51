@@ -172,7 +172,7 @@ def add_full_address_with_locality(base_directory, address_view,
 
 
 def print_addresses(address_view):
-    transform = latlong_to_cartsian()
+    transform = latlong_to_cartesian()
 
     if 'FULL_ADDRESS' in address_view:
         for _, item in address_view.iterrows():
@@ -184,7 +184,7 @@ def print_addresses(address_view):
             print('%.14f %.14f %s' % (lat, lng, _address(item)))
 
 
-def latlong_to_cartsian():
+def latlong_to_cartesian():
     """Return a callable that can be given the latitude/longitude which in
     turn will return the Cartesian coordinates."""
     source = pyproj.CRS.from_epsg(4326)  # WGS84
