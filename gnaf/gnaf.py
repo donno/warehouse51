@@ -127,7 +127,7 @@ def add_full_address_with_locality(base_directory, address_view,
 
     #address_view['FULL_ADDRESS'] = address_view.apply(_address, axis=1)
     locality_file = os.path.join(
-        base_directory, 'Standard', 'SA_LOCALITY_psv.csv')
+        base_directory, 'Standard', 'SA_LOCALITY_psv.psv')
     locality = pandas.read_csv(locality_file, '|',
                                usecols=['LOCALITY_PID', 'LOCALITY_NAME'])
 
@@ -193,9 +193,16 @@ def latlong_to_cartesian():
 
 
 if __name__ == '__main__':
-    base_directory = r'G:\GeoData\Extracted\G-NAF\G-NAF FEBRUARY 2020'
+    base_directory = r'G:\GeoData\Extracted\G-NAF\G-NAF AUGUST 2023'
 
-    # SA608 is an old mining town in regional South Australia.
-    view = pandas_address_view(base_directory, filter_to_locality='SA608')
+    # The structure of the locality_pid changed between the May 2021 and the
+    # August 2021 releases of the G-NAF data set, so it starts with loc and
+    # then as 12 alphanumeric characters.  The August 2021 release was meant
+    # to contain a mapping.
+    #
+    # SA2 / loc88df4c1f6c87 is Adelaide the capital city of South Australia.
+    # SA608 / locef2ffb75f36f is an old mining town in regional South Australia.
+    view = pandas_address_view(base_directory,
+                               filter_to_locality='locef2ffb75f36f')
     add_full_address(view)
     print_addresses(view)
