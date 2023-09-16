@@ -29,6 +29,7 @@ def pandas_address_view(base_directory, filter_to_locality=None):
 
     filter_to_locality: This enables filtering down to a particular locality
                         which may be a city or a suburb.
+                        This can be the unique ID for the locality or its name.
     """
 
     # Define the paths required
@@ -77,6 +78,11 @@ def pandas_address_view(base_directory, filter_to_locality=None):
 
     if filter_to_locality:
         # Filter address detail down to a specific locality
+        if not filter_to_locality.startswith('loc'):
+            # The locality was not the ID, so assume it is the name.
+            filter_to_locality = find_locality_by_name(base_directory,
+                                                       filter_to_locality)
+
         address_detail = address_detail.loc[
             address_detail['LOCALITY_PID'] == filter_to_locality]
 
@@ -192,6 +198,26 @@ def latlong_to_cartesian():
     return pyproj.Transformer.from_crs(source, destination).transform
 
 
+def find_locality_by_name(base_directory, name):
+    # Either add: exact=True or False or glob.
+
+    # This function is not efficient if you need to look-up multiple IDs from
+    # names.
+    locality_file = os.path.join(
+        base_directory, 'Standard', 'SA_LOCALITY_psv.psv')
+
+    locality = pandas.read_csv(locality_file,
+                               sep='|',
+                               usecols=['LOCALITY_PID', 'LOCALITY_NAME'])
+
+    mask = locality['LOCALITY_NAME'] == name.upper()
+    if mask.any():
+        result = locality['LOCALITY_PID'].loc[mask]
+        return result.item()
+    else:
+        raise ValueError(f'No locality with "{name}" found.')
+
+
 if __name__ == '__main__':
     base_directory = r'G:\GeoData\Extracted\G-NAF\G-NAF AUGUST 2023'
 
@@ -203,6 +229,6 @@ if __name__ == '__main__':
     # SA2 / loc88df4c1f6c87 is Adelaide the capital city of South Australia.
     # SA608 / locef2ffb75f36f is an old mining town in regional South Australia.
     view = pandas_address_view(base_directory,
-                               filter_to_locality='locef2ffb75f36f')
+                               filter_to_locality='Iron Knob')
     add_full_address(view)
     print_addresses(view)
