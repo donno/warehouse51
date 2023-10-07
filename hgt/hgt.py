@@ -17,7 +17,7 @@ Bring the pieces together to form the reader:
 
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright (C) 2020 Sean Donnellan"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 import array
 import io

@@ -26,7 +26,7 @@ def read_hgt_points(hgt_path):
         numpy.linspace(latitude, latitude + 1, size),
         )
 
-    positions = numpy.zeros((size * size, 3), dtype=numpy.float)
+    positions = numpy.zeros((size * size, 3), dtype=float)
     positions[:,0] = xx.ravel()
     positions[:,1] = yy.ravel()
 
