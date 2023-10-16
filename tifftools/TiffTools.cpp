@@ -51,31 +51,31 @@ namespace
     // Defines an axis-aligned rectangle.
     struct Rect
     {
-        uint32 x;
-        uint32 y;
-        uint32 width;
-        uint32 height;
+        uint32_t x;
+        uint32_t y;
+        uint32_t width;
+        uint32_t height;
     };
 
     struct TiledMetadata
     {
-        uint32 imageWidth;
-        uint32 imageLength;
-        uint32 tileWidth;
-        uint32 tileLength;
-        uint16 sampleFormat;
-        uint16 bitsPerSample;
+        uint32_t imageWidth;
+        uint32_t imageLength;
+        uint32_t tileWidth;
+        uint32_t tileLength;
+        uint16_t sampleFormat;
+        uint16_t bitsPerSample;
 
         Vector2D cellSize;
 
         // Return true if the file is the given format and given size.
-        bool Is(uint16 SampleFormat, uint16 BitsPerSample) const;
+        bool Is(uint16_t SampleFormat, uint16_t BitsPerSample) const;
 
         // Handle the optional no-data fields.
         std::optional<float> noDataValueFloat;
         std::optional<double> noDataValueDouble;
-        std::optional<int16> noDataValueInt;
-        std::optional<uint16> noDataValueUnsignedInt;
+        std::optional<int16_t> noDataValueInt;
+        std::optional<uint16_t> noDataValueUnsignedInt;
     };
 
     // Returns the number of cells that had data.
@@ -88,7 +88,7 @@ namespace
 
     template<typename VALUE_TYPE>
     void SaveScanLine(
-        uint32 Row, uint32 Width,
+        uint32_t Row, uint32_t Width,
         const VALUE_TYPE* Values,
         std::optional<VALUE_TYPE> NoDataValue,
         IElevationImporter* Grid);
@@ -108,7 +108,7 @@ namespace
         const TiledMetadata& MetaData,
         TiffTools::Point2D LowerLeft,
         tdata_t Buffer,
-        uint32 X, uint32 Y,
+        uint32_t X, uint32_t Y,
         IElevationImporter* Importer);
   }
 }
@@ -175,7 +175,9 @@ std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
     return {};
 }
 
-bool local::TiledMetadata::Is(uint16 SampleFormat, uint16 BitsPerSample) const
+bool local::TiledMetadata::Is(
+    uint16_t SampleFormat,
+    uint16_t BitsPerSample) const
 {
     return sampleFormat == SampleFormat && bitsPerSample == BitsPerSample;
 }
@@ -189,10 +191,10 @@ std::size_t local::WriteTileToGrid(
 {
     // row and column are within the buffer (values) and x and y are in the
     // grid.
-    uint32 withDataCount = 0;
-    for (uint32 row = 0; row < Tile.height; ++row)
+    uint32_t withDataCount = 0;
+    for (uint32_t row = 0; row < Tile.height; ++row)
     {
-        for (uint32 column = 0; column < Tile.width; ++column, ++Values)
+        for (uint32_t column = 0; column < Tile.width; ++column, ++Values)
         {
             if (!NoDataValue || *Values != *NoDataValue)
             {
@@ -211,13 +213,13 @@ std::size_t local::WriteTileToGrid(
 
 template<typename VALUE_TYPE>
 void local::SaveScanLine(
-    uint32 Row, uint32 Width,
+    uint32_t Row, uint32_t Width,
     const VALUE_TYPE* Values,
     std::optional<VALUE_TYPE> NoDataValue,
     IElevationImporter* Grid)
 {
     auto value = Values;
-    for (uint32 column = 0; column < Width; ++column, ++value)
+    for (uint32_t column = 0; column < Width; ++column, ++value)
     {
         if (!NoDataValue || *value != *NoDataValue)
         {
@@ -236,11 +238,11 @@ void local::ReadViaScanLinesInternal(
     std::optional<VALUE_TYPE> NoDataValue,
     IElevationImporter* Importer)
 {
-    uint32 width, height;
+    uint32_t width, height;
     TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &width);
     TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &height);
 
-    uint16 sampleCount;
+    uint16_t sampleCount;
     TIFFGetField(Tiff, TIFFTAG_SAMPLESPERPIXEL, &sampleCount);
 
     if (sampleCount != 1)
@@ -254,14 +256,14 @@ void local::ReadViaScanLinesInternal(
     auto progress = Importer->Progress();
     if (progress) progress->Start(height);
 
-    for (uint32 row = 0; row < height; ++row)
+    for (uint32_t row = 0; row < height; ++row)
     {
         // While the documentation showed this approach, it doesn't doesn't seem to be right.
         // Either, the scan line size and read functions knows to do [sample 1, sample 2, sample 3, sample 1, sample]
         // Or each sample is expected to be processed separately, i.e its a different attribute.
         // Imagine if the TIF contained airborne LIDAR, then maybe the samples are used to
         // encode different properties, i.e there are multiple samples (measurements) for each point.
-        for (uint16 s = 0; s < sampleCount; s++)
+        for (uint16_t s = 0; s < sampleCount; s++)
         {
             TIFFReadScanline(Tiff, buffer, row, s);
         }
@@ -292,17 +294,21 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
 
     const auto bitsPerSample = metadata.bitsPerSample;
 
+    std::optional<float> noDataValueFloat;
+    std::optional<double> noDataValueDouble;
+    std::optional<int16_t> noDataValueInt;
+    std::optional<uint16_t> noDataValueUnsignedInt;
     if (metadata.sampleFormat == SAMPLEFORMAT_IEEEFP)
     {
         printf("Samples are in IEEE floating point format with %d bits per "
                "sample.\n", bitsPerSample);
         if (bitsPerSample == 32)
         {
-            metadata.noDataValueFloat = local::NoDataValue<float>(Tiff);
+            noDataValueFloat = local::NoDataValue<float>(Tiff);
         }
         else if (bitsPerSample == 64)
         {
-            metadata.noDataValueDouble = local::NoDataValue<double>(Tiff);
+            noDataValueDouble = local::NoDataValue<double>(Tiff);
         }
         else
         {
@@ -316,7 +322,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            metadata.noDataValueInt = local::NoDataValue<int16>(Tiff);
+            noDataValueInt = local::NoDataValue<int16_t>(Tiff);
         }
         else
         {
@@ -330,7 +336,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            metadata.noDataValueInt = local::NoDataValue<uint16>(Tiff);
+            noDataValueInt = local::NoDataValue<uint16_t>(Tiff);
         }
         else
         {
@@ -348,7 +354,7 @@ void local::ReadTile(
     const TiledMetadata& Metadata,
     TiffTools::Point2D LowerLeft,
     tdata_t Buffer,
-    uint32 X, uint32 Y,
+    uint32_t X, uint32_t Y,
     IElevationImporter* Importer)
 {
     const auto& cellSize = Metadata.cellSize;
@@ -359,19 +365,20 @@ void local::ReadTile(
     Importer->BeginTile(
         Point2D{ LowerLeft.x + X * cellSize.x,
                  LowerLeft.y + Y * cellSize.y },
-        Point2D{ LowerLeft.x + (X + Metadata.tileWidth - 1) * cellSize.x,
+        Point2D{ LowerLeft.x + (X + Metadata.tileWidth -1) * cellSize.x,
                  LowerLeft.y + (Y + Metadata.tileLength - 1) * cellSize.y },
         cellSize);
 
-    const auto trueTileDimension = [](uint32 Start, uint32 End, uint32 Stride)
-    {
-         if (Start + Stride > End)
-         {
-             return End - Start;
-         }
+    const auto trueTileDimension =
+        [](uint32_t Start, uint32_t End, uint32_t Stride)
+        {
+            if (Start + Stride > End)
+            {
+                return End - Start;
+            }
 
-        return Stride;
-    };
+            return Stride;
+        };
 
     const local::Rect tileExtent =
         { 0, 0, Metadata.tileLength, Metadata.tileWidth };
@@ -389,7 +396,7 @@ void local::ReadTile(
     {
         // This is valid when the sample format is SAMPLEFORMAT_INT and
         // 16-bit.
-        auto values = static_cast<int16*>(Buffer);
+        auto values = static_cast<int16_t*>(Buffer);
         cellsWithData = WriteTileToGrid(
             tileExtent, values, Metadata.noDataValueInt, Importer);
     }
@@ -397,7 +404,7 @@ void local::ReadTile(
     {
         // This is valid when the sample format is SAMPLEFORMAT_UINT
         // and 16-bit.
-        auto values = static_cast<uint16*>(Buffer);
+        auto values = static_cast<uint16_t*>(Buffer);
         cellsWithData = WriteTileToGrid(
             tileExtent, values, Metadata.noDataValueUnsignedInt,
             Importer);
@@ -464,7 +471,7 @@ void TiffTools::RegisterAdditionalTiffTags()
 
 TiffTools::Vector2D TiffTools::CellSize(TIFF* Tiff)
 {
-    int16 count;
+    int16_t count;
     double* scaleXYZ;
     if (TIFFGetField(Tiff, local::GEOTIFF_MODELPIXELSCALETAG, &count,
                      &scaleXYZ) == 1)
@@ -495,7 +502,7 @@ TiffTools::Bounds(TIFF* Tiff, Vector2D CellSize)
     // Technically, this is going to be tie point count * 6, i.e its actually
     // the number of values that form tie points. There are six values for
     // each tie point.
-    int16 tiePointCount;
+    int16_t tiePointCount;
     double* tiePoints;
     if (TIFFGetField(Tiff, local::GEOTIFF_MODELTIEPOINTTAG, &tiePointCount,
                      &tiePoints) != 1)
@@ -506,7 +513,7 @@ TiffTools::Bounds(TIFF* Tiff, Vector2D CellSize)
 
     // Assert that tiePointCount is divisible by 6.
 
-    uint32 width, height;
+    uint32_t width, height;
     TIFFGetField(Tiff, TIFFTAG_IMAGEWIDTH, &width);
     TIFFGetField(Tiff, TIFFTAG_IMAGELENGTH, &height);
 
@@ -530,7 +537,7 @@ TiffTools::Bounds(TIFF* Tiff, Vector2D CellSize)
 
 void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 {
-    uint16 sampleCount;
+    uint16_t sampleCount;
     TIFFGetField(Tiff, TIFFTAG_SAMPLESPERPIXEL, &sampleCount);
 
     if (sampleCount != 1)
@@ -545,7 +552,7 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
 
     tdata_t buffer = _TIFFmalloc(TIFFTileSize(Tiff));
 
-    int16 orientation = 1;
+    int16_t orientation = 1;
     TIFFGetField(Tiff, TIFFTAG_ORIENTATION, &orientation);
     if (orientation != 1)
     {
@@ -556,9 +563,9 @@ void TiffTools::ReadViaTiles(TIFF* Tiff, IElevationImporter* Importer)
     auto progress = Importer->Progress();
     if (progress) progress->Start(TIFFNumberOfTiles(Tiff));
 
-    for (uint32 y = 0; y < metadata.imageLength; y += metadata.tileLength)
+    for (uint32_t y = 0; y < metadata.imageLength; y += metadata.tileLength)
     {
-        for (uint32 x = 0; x < metadata.imageWidth; x += metadata.tileWidth)
+        for (uint32_t x = 0; x < metadata.imageWidth; x += metadata.tileWidth)
         {
             local::ReadTile(Tiff, metadata, lowerLeft, buffer, x, y, Importer);
             if (progress) progress->TileProcessed();
@@ -578,17 +585,17 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
 
     Importer->BeginTile(lowerLeft, upperRight, cellSize);
 
-    uint16 sampleFormat;
+    uint16_t sampleFormat;
     TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &sampleFormat);
 
-    uint16 bitsPerSample;
+    uint16_t bitsPerSample;
     TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &bitsPerSample);
 
     // The default value for this tag is 1 and supporting other values is not
     // a baseline requirement. A value of one means the 0th row represents the
     // visual top of the image, and the 0th column represents the visual
     // left-hand side.
-    int16 orientation = 1;
+    int16_t orientation = 1;
     TIFFGetField(Tiff, TIFFTAG_ORIENTATION, &orientation);
     if (orientation != 1)
     {
@@ -615,12 +622,12 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 8)
         {
-            auto noDataValue = local::NoDataValue<int8>(Tiff);
+            auto noDataValue = local::NoDataValue<int8_t>(Tiff);
             local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
         else if (bitsPerSample == 16)
         {
-            auto noDataValue = local::NoDataValue<int16>(Tiff);
+            auto noDataValue = local::NoDataValue<int16_t>(Tiff);
             local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
         else
@@ -636,12 +643,12 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
         printf("Samples are unsigned integer.\n");
         if (bitsPerSample == 8)
         {
-            auto noDataValue = local::NoDataValue<uint8>(Tiff);
+            auto noDataValue = local::NoDataValue<uint8_t>(Tiff);
             local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
         else if (bitsPerSample == 16)
         {
-            auto noDataValue = local::NoDataValue<uint16>(Tiff);
+            auto noDataValue = local::NoDataValue<uint16_t>(Tiff);
             local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
         else
