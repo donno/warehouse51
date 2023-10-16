@@ -116,7 +116,8 @@ namespace
 template<typename TYPE>
 std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
 {
-#if defined(__GLIBCXX__) && __GLIBCXX__ == 20190406
+if defined(__GLIBCXX__) && (__GLIBCXX__ == 20190406 || \
+                            __GLIBCXX__ == 20210601)
     // This version of libstd++ doesn't have a std::from_chars() that works
     // with floating-point.
     constexpr bool hasFromChars = !std::is_floating_point_v<TYPE>;
