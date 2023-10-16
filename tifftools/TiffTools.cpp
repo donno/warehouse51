@@ -289,6 +289,13 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
     TIFFGetField(Tiff, TIFFTAG_TILELENGTH, &metadata.tileLength);
     TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &metadata.bitsPerSample);
     TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &metadata.sampleFormat);
+    if (TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &metadata.sampleFormat) != 1)
+    {
+        // Sample format was not defined, using the default of 1 (unsigned
+        // integer data).
+        // https://awaresystems.be/imaging/tiff/tifftags/sampleformat.html
+        metadata.sampleFormat = SAMPLEFORMAT_UINT;
+    }
 
     metadata.cellSize = TiffTools::CellSize(Tiff);
 
@@ -586,7 +593,13 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
     Importer->BeginTile(lowerLeft, upperRight, cellSize);
 
     uint16_t sampleFormat;
-    TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &sampleFormat);
+    if (TIFFGetField(Tiff, TIFFTAG_SAMPLEFORMAT, &sampleFormat) != 1)
+    {
+        // Sample format was not defined, using the default of 1 (unsigned
+        // integer data).
+        // https://awaresystems.be/imaging/tiff/tifftags/sampleformat.html
+        sampleFormat = SAMPLEFORMAT_UINT;
+    }
 
     uint16_t bitsPerSample;
     TIFFGetField(Tiff, TIFFTAG_BITSPERSAMPLE, &bitsPerSample);
