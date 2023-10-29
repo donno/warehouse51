@@ -23,6 +23,7 @@ except ImportError:
 NAMESPACES = {
     'eml': 'urn:oasis:names:tc:evs:schema:eml',
     'xal': 'urn:oasis:names:tc:ciq:xsdschema:xAL:2.0',
+    'amf': 'http://www.aec.gov.au/xml/schema/mediafeed',  # AEC Media Feed.
 }
 
 
@@ -81,6 +82,95 @@ class Candidate:
 
     def __repr__(self):
         return f'Candidate("{self.name}")'
+
+
+class PollingDistrict:
+
+    # Other information that is not included is:
+    # - Products industry
+    # - Demographic (metropolitan (inner or outer) and rural area)
+    # - Location - A description of  the physical location of the polling
+    #   district using major land marks like roads or rivers.
+
+    def __init__(self, xml_element):
+        self.xml = xml_element
+        self._identifier = self.xml.find('./amf:PollingDistrictIdentifier',
+                                         NAMESPACES)
+
+    @property
+    def identifier(self):
+        """The unique ID for the polling district."""
+        return self._identifier.attrib['Id']
+
+    @property
+    def short_code(self):
+        """The four letter code used to represent the polling district."""
+        return self._identifier.attrib['ShortCode']
+
+    @property
+    def name(self):
+        """The name of the polling district."""
+        return self._identifier.find('./amf:Name', NAMESPACES).text
+
+    @property
+    def state(self):
+        """The state in which the polling district is located."""
+        return self._identifier.find('./amf:StateIdentifier',
+                                     NAMESPACES).attrib['Id']
+
+    @property
+    def area(self):
+        """The approximate area covered by the polling district in sq KMs."""
+        return int(self._identifier.find('./amf:Area', NAMESPACES).text)
+
+    @property
+    def name_source(self):
+        """Describes derivation of the polling district name."""
+        return self._identifier.find('./amf:NameDerivation', NAMESPACES).text
+
+    def __repr__(self):
+        return f'PollingDistrict("{self.name}", "{self.state}")'
+
+
+class PollingPlace:
+    """A polling place is typically a physical location for voting.
+
+    The MediaFeed uses an extension of the EML polling place type, with the
+    main extension being if it is wheelchair accessible.
+    """
+    def __init__(self, xml_element):
+        self.xml = xml_element
+
+        # For Australia elections only physical locations seem to be used.
+        assert self.xml.find('./eml:PhysicalLocation', NAMESPACES)
+
+        self._address =  self.xml.find('./eml:PhysicalLocation/eml:Address',
+                                       NAMESPACES)
+
+    @property
+    def name(self):
+        """The name of the premises where the polling place is located."""
+        return self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="Premises"]',
+            NAMESPACES).text
+
+    @property
+    def lat_long(self):
+        gps = self._address.find('./xal:PostalServiceElements', NAMESPACES)
+        assert gps.attrib['Type'] == "GDA94"  # Don't handle anything else.
+        latitude = gps.find('./xal:AddressLatitude', NAMESPACES)
+        if latitude is None or not latitude.text:
+            return (None, None)
+
+        return (
+            float(latitude.text),
+            float(gps.find('./xal:AddressLongitude', NAMESPACES).text),
+        )
+
+    # Other information that could be included is more details about the
+    # address of the polling place  address line, suburb, state and postcode.
+    def __repr__(self):
+        return f'PollingPlace("{self.name}" @ {self.lat_long})'
 
 
 def load(path, name_fragment):
@@ -226,6 +316,22 @@ def report_affiliations():
         print('No affiliations found.')
 
 
+def load_polling_districts(path):
+    """Load the list of poling distrincts and the poling places in each."""
+    xml = load(path, '-pollingdistricts-')
+    # /MediaFeed/ManagingAuthority should be the AEC. This isn't tested.
+    # Likewise the EventIdentifier is part of the list as well.
+
+    districts = xml.findall('./amf:PollingDistrictList/amf:PollingDistrict',
+                            NAMESPACES)
+    for district in districts:
+        yield PollingDistrict(district), [
+            PollingPlace(element)
+            for element in district.findall(
+            './amf:PollingPlaces/amf:PollingPlace', NAMESPACES)
+        ]
+
+
 PATH = 'data/aec-mediafeed-Detailed-Preload-24310-20190515152735.zip'
 PATH = 'data/aec-mediafeed-Detailed-Preload-27966-20220518111207.zip'
 
@@ -233,4 +339,15 @@ PATH = 'data/aec-mediafeed-Detailed-Preload-27966-20220518111207.zip'
 if __name__ == '__main__':
     # report_email_domains()
     # report_professions()
-    report_affiliations()
+    # report_affiliations()
+
+    # TODO: Consider sorting and grouping by state.
+    for district, places in load_polling_districts(PATH):
+        print('%3s %s' % (district.state, district.name))
+        for place in places:
+            lat, long = place.lat_long
+            if lat is None:
+                print(f'  {place.name}')
+            else:
+                print(f'  {place.name} at ({lat:3f}, {long:3f})')
+
