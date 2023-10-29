@@ -11,6 +11,7 @@ and updated in the week before the election.
 """
 
 import collections
+import types
 import zipfile
 
 try:
@@ -33,6 +34,29 @@ class Candidate:
     def independent(self) -> bool:
         assert self.xml.attrib['Independent'] in {'yes', 'no'}
         return self.xml.attrib['Independent'] == 'yes'
+
+    @property
+    def affiliation(self):
+        """The affiliation of the candidate otherwise None.
+
+        The affiliation has a name, short_code, id and affiliation type.
+        """
+        affiliation_id = self.xml.find(
+            './eml:Affiliation/eml:AffiliationIdentifier',
+            NAMESPACES)
+        if not affiliation_id:
+            # Most the times no affiliation means the candidate is
+            # independent however this is not always the case.
+            #assert self.independent, self.name
+            return None
+
+        return types.SimpleNamespace(
+            name=affiliation_id.find('./eml:RegisteredName', NAMESPACES).text,
+            short_code=affiliation_id.attrib['ShortCode'],
+            id=affiliation_id.attrib['Id'],
+            affiliation_type=self.xml.find('./eml:Affiliation/eml:Type',
+                                           NAMESPACES).text,
+        )
 
     @property
     def name(self) -> str:
@@ -138,22 +162,32 @@ def load_candidates(path):
             ]
 
             for c in actual_candidates:
-                yield _election(election), _contest(contest), c
+                yield election_as_dict, _contest(contest), c
 
 
-PATH = 'data/aec-mediafeed-Detailed-Preload-24310-20190515152735.zip'
-PATH = 'data/aec-mediafeed-Detailed-Preload-27966-20220518111207.zip'
+
+def report_professions():
+    """Report on the different professions of each candidate."""
+    profession_counter = collections.Counter(
+        candidate.profession
+        for _, _, candidate in load_candidates(PATH)
+        if candidate.profession
+    )
+
+    print('Top 20 professions of candidates')
+    for k, v in profession_counter.most_common(20):
+        print(v, k)
 
 
-if __name__ == '__main__':
-    # for election, contest, candidate in load_candidates(PATH):
-    #     print(election, contest)
-    #     print(candidate)
+def report_email_domains():
+    """Report on the different email domains of each candidate.
 
+    This is not available for the 2022 election as emails are not included in
+    the preload data.
+    """
     def _domain(email: str):
         return email.partition('@')[2]
 
-    email_domains = {}
     domain_counter = collections.Counter(
         _domain(candidate.email)
         for _, _, candidate in load_candidates(PATH)
@@ -166,12 +200,31 @@ if __name__ == '__main__':
         for k, v in domain_counter.most_common(20):
             print(v, k)
 
-    profession_counter = collections.Counter(
-        candidate.profession
+
+def report_affiliations():
+    """Report on the affiliations of each candidate."""
+    def _domain(email: str):
+        return email.partition('@')[2]
+
+    affiliation_counter = collections.Counter(
+        candidate.affiliation.name
         for _, _, candidate in load_candidates(PATH)
-        if candidate.profession
+        if candidate.affiliation
     )
 
-    print('Top 20 professions of candidates')
-    for k, v in profession_counter.most_common(20):
-        print(v, k)
+    if affiliation_counter:
+        print('Top 20 affiliations (parties)')
+        for k, v in affiliation_counter.most_common(20):
+            print(v, k)
+    else:
+        print('No affiliations found.')
+
+
+PATH = 'data/aec-mediafeed-Detailed-Preload-24310-20190515152735.zip'
+PATH = 'data/aec-mediafeed-Detailed-Preload-27966-20220518111207.zip'
+
+
+if __name__ == '__main__':
+    # report_email_domains()
+    # report_professions()
+    report_affiliations()
