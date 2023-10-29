@@ -101,7 +101,7 @@ def load(path, name_fragment):
         #  'xml/eml-230-candidates-24310.xml']
 
 
-def load_candidates(path):
+def load_candidates(path, *, election_category=None):
     """Loads the list of candidates for each election for the event.
 
     For example, the event may be the 2019 Federal Election, and the two
@@ -112,6 +112,9 @@ def load_candidates(path):
     The candidates are broken down by:
     - Election (Senate or House)
         - Contest (State or Electoral Division)
+
+    If election_category is not None then only the candidates in the given
+    election category will be included.
     """
 
     def _event(candidates):
@@ -149,8 +152,11 @@ def load_candidates(path):
     elections = candidates.findall('./eml:Election', NAMESPACES)
 
     for election in elections:
-        # print('------')
-        # print(_election(election))
+        election_as_dict = _election(election)
+
+        if (election_category and
+            election_as_dict['category'] != election_category):
+            continue
 
         contests = election.findall('./eml:Contest', NAMESPACES)
         for contest in contests:
