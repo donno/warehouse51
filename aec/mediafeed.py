@@ -52,6 +52,7 @@ ELECTION = 'V:\\24310_2019_Election\\Standard_Eml'
 
 NAMESPACES = {
     'eml': 'urn:oasis:names:tc:evs:schema:eml',
+    'mf': 'http://www.aec.gov.au/xml/schema/mediafeed',
 }
 
 
@@ -179,13 +180,15 @@ def eml_contests_to_parquet(eml, contests, output_directory, minimised=False):
 
 def emls(directory):
     def _files():
+
         for file in os.scandir(directory):
             if all((file.name.startswith('aec-mediafeed-'),
-                    '-Eml-' in file.name,
+                    # Australia's 2023 referendum didn't have this next one.
+                    #'-Eml-' in file.name,
                     file.name.endswith('.zip'))):
                 # Zipped
                 yield True, file.path
-            elif file.name.startswith('eml-') and filename.endswith('.xml'):
+            elif file.name.startswith('eml-') and file.name.endswith('.xml'):
                 # Uncompressed
                 yield False, file.path
 
@@ -193,7 +196,7 @@ def emls(directory):
         if compressed:
             with zipfile.ZipFile(path) as zipped_eml:
                 xmls = [name for name in zipped_eml.namelist()
-                        if name.startswith('xml/eml') and name.endswith('xml')]
+                        if name.startswith('xml/') and name.endswith('xml')]
                 for name in xmls:
                     with zipped_eml.open(name) as eml:
                         yield ElementTree.parse(eml).getroot()
