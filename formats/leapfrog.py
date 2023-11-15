@@ -52,6 +52,12 @@ def read_leapfrog_mesh(path):
         format_type = field_type_to_format_type[field.field_type]
         return f"{field.count * field.type_per_item}{format_type}"
 
+    def read_values_for_field(reader, field):
+        """Read the  values for the given field from reader."""
+        field_struct_format = field_to_struct_format(field)
+        data = reader.read(struct.calcsize(field_struct_format))
+        decoded = struct.unpack_from(field_struct_format, data)
+        return numpy.array(decoded).reshape(-1, field.type_per_item)
 
     with open(path, "rb") as reader:
         header = reader.read(len(expected_header))
@@ -68,7 +74,6 @@ def read_leapfrog_mesh(path):
             raise ValueError("Expected index but didn't find it.")
 
         print(index)
-        struct_format = ''.join(map(field_to_struct_format, index))
 
         binary_header = reader.read(len(expected_binary_header))
         if binary_header == b"[binary]":
@@ -76,25 +81,11 @@ def read_leapfrog_mesh(path):
             separator = struct.unpack_from("3i", reader.read(separator_size))
             assert separator == (15732735, 1115938331, 1072939210)
 
-            binary = reader.read()  # Read all of it for now.
+            data = {}
+            for field in index:
+                data[field.field_name] = read_values_for_field(reader, field)
 
-            data = struct.unpack_from(struct_format, binary)
-
-            # Split the data
-            #
-            # I haven't worked on making this part general yet so for now
-            # it will simply assume a fixed order.
-            assert index[0].field_name == "Tri"
-            assert index[1].field_name == "Location"
-
-            facet_end = index[0].count * index[0].type_per_item
-            facets = data[:facet_end]
-            facets = numpy.array(facets).reshape((-1, index[0].type_per_item))
-
-            points = data[
-                facet_end : facet_end + index[1].count * index[1].type_per_item
-            ]
-            points = numpy.array(points).reshape((-1, index[1].type_per_item))
+            facets, points = data["Tri"], data["Location"]
             return os.path.splitext(os.path.basename(path))[0], facets, points
         else:
             raise ValueError("Expected binary but didn't find it.")
