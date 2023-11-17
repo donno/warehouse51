@@ -27,6 +27,9 @@ def parsed_lines(reader):
         if line.startswith("#"):  # Comment
             continue
 
+        if line == '\n':  # Skip blank lines.
+            continue
+
         parts = line.strip().split()
         keyword = parts[0]
         yield keyword, parts[1:]
@@ -211,6 +214,22 @@ def read_coordinate_system(reader):
             break
 
 
+def read_surface(reader):
+    groups = []
+    for line in reader:
+        if line.startswith(("TFACE", "3DFace")):
+            groups = read_faces(reader)
+        elif line.startswith("GOCAD_ORIGINAL_COORDINATE_SYSTEM"):
+            read_coordinate_system(reader)
+        elif line.startswith("PROPERTY_CLASS_HEADER"):
+            read_property_class_header(reader)
+        elif line.startswith(("GEOLOGICAL_FEATURE", "GEOLOGICAL_TYPE")):
+            pass
+        elif line.startswith(("BSTONE", "BORDER")):
+            pass  # Borders not implemented.
+    return groups
+
+
 def read(path):
     # Header
     # Body
@@ -235,18 +254,7 @@ def read(path):
         header = read_header(reader)
         print(header)
 
-        # line = reader.readline()
-        for line in reader:
-            if line.startswith(("TFACE", "3DFace")):
-                groups = read_faces(reader)
-            elif line.startswith("GOCAD_ORIGINAL_COORDINATE_SYSTEM"):
-                read_coordinate_system(reader)
-            elif line.startswith("PROPERTY_CLASS_HEADER"):
-                read_property_class_header(reader)
-            elif line.startswith(("GEOLOGICAL_FEATURE", "GEOLOGICAL_TYPE")):
-                pass
-            elif line.startswith(("BSTONE", "BORDER")):
-                pass  # Borders not implemented.
+        groups = read_surface(reader)
 
     if not groups:
         raise ValueError("Found no facets/points")
