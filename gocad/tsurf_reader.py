@@ -22,6 +22,16 @@ class State(enum.IntEnum):
     WAITING_FOR_END = 4
 
 
+def parsed_lines(reader):
+    for line in reader:
+        if line.startswith("#"):  # Comment
+            continue
+
+        parts = line.strip().split()
+        keyword = parts[0]
+        yield keyword, parts[1:]
+
+
 def read_group(reader):
     values = {}
 
@@ -73,7 +83,7 @@ def read_header(reader):
             pass
 
     # Apparently the header suppose to end when it hits PROPERTY_CLASS_HEADER
-    # Not hte }
+    # Not the }
 
     # PROPERTY_CLASS_HEADER
     return header
@@ -86,6 +96,18 @@ def read_property_class_header(reader):
             continue
         if line.startswith("}"):  # End of header.
             break
+
+
+def read_atom_region_indicators(reader):
+    for keyword, arguments in parsed_lines(reader):
+        if keyword == 'ARI':
+            # This could collect all the values and then return when done.
+            pass  # Ignore this for now.
+        elif keyword == 'END_ATOM_REGION_INDICATORS':
+            break
+        else:
+            raise NotImplementedError(
+                f"Unexpected kind {keyword} with the atom region indicators")
 
 
 def read_nodes(reader):
@@ -114,9 +136,17 @@ def read_nodes(reader):
             node_id = int(parts[1])
             x, y, z = parts[2:5]
             nodes.append((node_id, x, y, z))
+        elif keyword in ("PATOM", "ATOM"):
+            # Unsure what a PATOM is, maybe POINT or PROPERTY ATOM
+            pass
+        elif keyword == "BEGIN_ATOM_REGION_INDICATORS":
+            read_atom_region_indicators(reader)
+        elif keyword == 'PROPERTY_CN':
+            # Start of a property and will end with END_PROPERTY_CN.
+            properties[parts[1]] = read_property(reader, 'CN')
         else:
             # VRTX, ATOM and PVRTX are main cases.
-            raise NotImplementedError(f"unexpected kind {keyword}")
+            raise NotImplementedError(f"Unexpected kind {keyword}")
 
     return nodes, None
 
