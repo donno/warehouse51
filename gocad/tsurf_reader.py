@@ -110,22 +110,33 @@ def read_atom_region_indicators(reader):
                 f"Unexpected kind {keyword} with the atom region indicators")
 
 
+def read_property(reader, property_type):
+    values = []
+
+    for keyword, arguments in parsed_lines(reader):
+        if keyword == f"{property_type}P":
+            if len(arguments) > 1:
+                raise NotImplementedError(
+                    "Dealing with multi-value properties")
+            values.append(int(arguments[0]))
+        elif keyword == f'END_PROPERTY_{property_type}':
+            return values
+        else:
+            raise NotImplementedError(
+                f"Unexpected kind {keyword} with the atom region indicators")
+
+
 def read_nodes(reader):
     nodes = []
+    properties = {}
 
-    for line in reader:
-        if line.startswith("#"):
-            continue  # Ignore comments
-
-        parts = line.strip().split()
-        keyword = parts[0]
-
+    for keyword, parts in parsed_lines(reader):
         if keyword in ("SEG", "TRGL"):
             # End of nodes start of elements.
-            return nodes, line
+            return nodes, keyword + ' ' + ' '.join(parts)
         if keyword == "PVRTX":
-            node_id = int(parts[1])
-            x, y, z = parts[2:5]
+            node_id = int(parts[0])
+            x, y, z = parts[1:4]
             nodes.append((node_id, x, y, z))
 
             # Ignore the remaining properties of a node for now.
@@ -133,8 +144,8 @@ def read_nodes(reader):
             # They are from the PROPERTIES line.
             # PROPERTIES U V Dip_Angle FaultStrike
         elif keyword == "VRTX":
-            node_id = int(parts[1])
-            x, y, z = parts[2:5]
+            node_id = int(parts[0])
+            x, y, z = parts[1:4]
             nodes.append((node_id, x, y, z))
         elif keyword in ("PATOM", "ATOM"):
             # Unsure what a PATOM is, maybe POINT or PROPERTY ATOM
@@ -143,7 +154,7 @@ def read_nodes(reader):
             read_atom_region_indicators(reader)
         elif keyword == 'PROPERTY_CN':
             # Start of a property and will end with END_PROPERTY_CN.
-            properties[parts[1]] = read_property(reader, 'CN')
+            properties[parts[0]] = read_property(reader, 'CN')
         else:
             # VRTX, ATOM and PVRTX are main cases.
             raise NotImplementedError(f"Unexpected kind {keyword}")
@@ -162,21 +173,14 @@ def read_elements(reader, line):
         a, b, c = parts[1:4]
         triangles.append((int(a), int(b), int(c)))
 
-    for line in reader:
-        # TODO :Consider making a reader that skips comment lines.
-        if line.startswith("#"):
-            continue  # Comment
-
-        parts = line.split()
-        keyword = parts[0]
-
+    for keyword, parts in parsed_lines(reader):
         if keyword == "TRGL":
             # Doesn't handle any extra properties
             # as per TRGL_PROPERTIES at this stage.
-            a, b, c = parts[1:4]
+            a, b, c = parts[0:3]
             triangles.append((int(a), int(b), int(c)))
         else:
-            return triangles, line
+            return triangles, keyword + ' ' + ' '.join(parts)
 
     return triangles, None
 
@@ -221,7 +225,12 @@ def read(path):
             raise ValueError("Expected a GOCAD ASCII file")
         _, type_name, version_number = line.strip().split(" ")
 
-        print(type_name, version_number)
+        # This reader could be extended for the other GOCAD ASCII Files.
+        if type_name != 'TSurf':
+            raise ValueError("Expected a TSurf (Surface) file.")
+
+        if type_name == 'TSurf' and version_number != '1':
+            raise ValueError(f"Expected a version 1 file not {version_number}")
 
         header = read_header(reader)
         print(header)
@@ -279,4 +288,19 @@ def read(path):
 
 if __name__ == "__main__":
     # Sample datafile from Los Alamos Grid Toolbox (LaGriT).
-    read("input_3tri_all_props.ts")
+    #read("input_3tri_all_props.ts")
+
+    import os
+    import sys
+    if len(sys.argv) < 2:
+        print(f"usage: {sys.argv[0]} <folder-with-ts_files>")
+        sys.exit(1)
+
+    for root, dirname, files in os.walk(sys.argv[1]):
+        for file in files:
+            if file.endswith('.ts'):
+                try:
+                    read(os.path.join(root, file))
+                except:
+                    print(os.path.join(root, file))
+                    raise
