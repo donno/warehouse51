@@ -230,6 +230,40 @@ def read_surface(reader):
     return groups
 
 
+def read_grid_3d(reader):
+
+    origin = []  # This is the front-bottom-left corner of the grid.
+    directions = [None, None, None]
+    counts = []  # The number of blocks in cells (samples) in each direction.
+
+    for keyword, parts in parsed_lines(reader):
+        if keyword == "GOCAD_ORIGINAL_COORDINATE_SYSTEM":
+            read_coordinate_system(reader)
+        elif keyword == 'AXIS_O':
+            # Read the origin of the coordinate system.
+            origin = list(map(float, parts))
+        elif keyword == 'AXIS_U':
+            directions[0] = list(map(float, parts))
+        elif keyword == 'AXIS_V':
+            directions[1] = list(map(float, parts))
+        elif keyword == 'AXIS_W':
+            directions[2] = list(map(float, parts))
+        elif keyword == 'AXIS_N':
+            counts = list(map(int, parts))
+        else:
+            pass
+
+    if any(axis is None for axis in directions):
+        raise ValueError("Missing an axis direction")
+
+    # This is a work-in-progress, at the moment its just to get something
+    # done.
+    print('Origin', origin)
+    print('Directions', directions)
+    print(counts)
+    print(f'Count: {counts[0]} x {counts[1]} x {counts[2]}')
+
+
 def read(path):
     # Header
     # Body
@@ -245,8 +279,6 @@ def read(path):
         _, type_name, version_number = line.strip().split(" ")
 
         # This reader could be extended for the other GOCAD ASCII Files.
-        if type_name != 'TSurf':
-            raise ValueError("Expected a TSurf (Surface) file.")
 
         if type_name == 'TSurf' and version_number != '1':
             raise ValueError(f"Expected a version 1 file not {version_number}")
@@ -254,7 +286,12 @@ def read(path):
         header = read_header(reader)
         print(header)
 
-        groups = read_surface(reader)
+        if type_name == 'TSurf':
+            groups = read_surface(reader)
+        #elif type_name == 'Voxet':
+        #     groups = read_grid_3d(reader)
+        else:
+            raise NotImplementedError(f"Unsupported type {type_name}")
 
     if not groups:
         raise ValueError("Found no facets/points")
