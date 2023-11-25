@@ -1,16 +1,15 @@
 """Convert text to a polylines that represents that text.
 
-This uses Harfbuzz though the Python binding vharfbuzz.
+This uses Harfbuzz though the Python binding uharfbuzz.
 
-In the future this may be reduced to using uharfbuzz instead.
 A simple demo which hooks this up to Skia to draw would also be nice.
 """
 
 __author__ = "Sean Donnellan"
 __copyright__ = "Copyright (C) 2023 Sean Donnellan"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-import vharfbuzz
+import uharfbuzz
 import os
 
 
@@ -38,12 +37,19 @@ class Font:
             message = f'Could not find {font_path}'
             raise FileNotFoundError(message)
 
-        self._data = vharfbuzz.Vharfbuzz(font_path)
+        with open(font_path, "rb") as reader:
+            font_data = reader.read()
 
+        # Load the font.
+        face = uharfbuzz.Face(font_data)
+        font = uharfbuzz.Font(face)
+        font.scale = (face.upem, face.upem)
+        uharfbuzz.ot_font_set_funcs(font)
+        self._hbfont = font
 
     @property
     def harfbuzz_font(self):
-        return self._data.hbfont
+        return self._hbfont
 
     @property
     def extents(self):
@@ -67,7 +73,12 @@ class Font:
         Buffer
             A harfbuzz buffer object.
         """
-        return self._data.shape(text)
+        buffer = uharfbuzz.Buffer()
+        buffer.add_str(text)
+        buffer.guess_segment_properties()
+        uharfbuzz.shape(self.harfbuzz_font, buffer, features=None,
+                        shapers=None)
+        return buffer
 
 
 class Lines:
@@ -96,6 +107,7 @@ class Lines:
         self._lines.append(self._current_line)
         self._current_line = []
 
+
 def draw_functions():
     """The draw functions build a series of line segments using Lines."""
 
@@ -121,13 +133,13 @@ def draw_functions():
         # The idea would be to smooth the curve and generate N points along it.
         lines.add_to_current_line(x, y)
 
-    drawfuncs = vharfbuzz.hb.DrawFuncs()
-    drawfuncs.set_move_to_func(move_to)
-    drawfuncs.set_line_to_func(line_to)
-    drawfuncs.set_cubic_to_func(cubic_to)
-    drawfuncs.set_quadratic_to_func(quadratic_to)
-    drawfuncs.set_close_path_func(Lines.close_current_line)
-    return drawfuncs
+    functions = uharfbuzz.DrawFuncs()
+    functions.set_move_to_func(move_to)
+    functions.set_line_to_func(line_to)
+    functions.set_cubic_to_func(cubic_to)
+    functions.set_quadratic_to_func(quadratic_to)
+    functions.set_close_path_func(Lines.close_current_line)
+    return functions
 
 
 def text_to_lines_per_glyph(font: Font, text: str):
