@@ -2,6 +2,7 @@
 """
 
 import itertools
+import math
 import unittest
 
 
@@ -28,8 +29,26 @@ def generate_sequence_a000045():
         previous, current = current, current + previous
 
 
-def generate_sequence_a140106(starting_n: int = 0):
+def value_a140106(n: int):
+    """Return the n-th value in the numerical sequence A140106.
+
+    This uses 1-based indexing so n = 1 is the first number in the sequence not
+    n = 0.
+
+    See https://oeis.org/A140106/list
+
+    Formula provided by Washington Bomfim, Feb 12 2011.
+    """
+    if n > 1:
+        return math.floor((n - 2) / 2)
+    else:
+        return 0
+
+
+def generate_sequence_a140106(starting_n: int = 1):
     """Generate the numerical sequence A140106.
+
+    starting_n uses 1-based indexing so 1 is the first number in the sequence.
 
     Number of non-congruent diagonals in a regular n-gon.
 
@@ -43,17 +62,34 @@ def generate_sequence_a140106(starting_n: int = 0):
     Option 1) a(n) = floor((n-2)/2), for n > 1, otherwise 0
     Option 2) a(n) = x^4/(1-x-x^2+x^3)
     """
-    if starting_n:
-        raise NotImplementedError("Starting a given n is not yet implemented.")
+    if starting_n < 2:
+        yield 0
+        yield 0
 
-    yield 0
-    yield 0
-    for value in itertools.count(start=1):
+    start = value_a140106(starting_n) + 1
+
+    for value in itertools.count(start=start):
         yield value - 1
         yield value
 
 
-class Tests(unittest.TestCase):
+class SequenceA140106Tests(unittest.TestCase):
+    def test_value_a140106(self):
+        # Compare with the list here: https://oeis.org/A140106/list
+        self.assertEqual(value_a140106(1), 0)
+        self.assertEqual(value_a140106(2), 0)
+        self.assertEqual(value_a140106(3), 0)
+        self.assertEqual(value_a140106(4), 1)
+        self.assertEqual(value_a140106(5), 1)
+        self.assertEqual(value_a140106(6), 2)
+        self.assertEqual(value_a140106(7), 2)
+
+        # Try larger numbers.
+        self.assertEqual(value_a140106(70), 34)
+        self.assertEqual(value_a140106(71), 34)
+        self.assertEqual(value_a140106(72), 35)
+        self.assertEqual(value_a140106(73), 35)
+
     def test_generate_sequence_a000045(self):
         sequence = generate_sequence_a000045()
         self.assertEqual(next(sequence), 0)
@@ -64,6 +100,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(next(sequence), 5)
         self.assertEqual(next(sequence), 8)
 
+
+class SequenceA000045Tests(unittest.TestCase):
     def test_generate_sequence_a000045_alternate_check(self):
         sequence = generate_sequence_a000045()
 
@@ -98,6 +136,89 @@ class Tests(unittest.TestCase):
 
         self.assertEqual(next(sequence), 3)
         self.assertEqual(next(sequence), 4)
+
+
+    def test_generate_sequence_a140106_with_start_1(self):
+        sequence = generate_sequence_a140106()
+        sequence_0 = next(sequence)
+        sequence_1 = next(sequence)
+        sequence_2 = next(sequence)
+        sequence_3 = next(sequence)
+
+        self.assertEqual(sequence_0, 0)
+        self.assertEqual(sequence_1, 0)
+        self.assertEqual(sequence_2, 0)
+        self.assertEqual(sequence_3, 1)
+
+        # The sequence starts at 1 (i.e. it uses 1-based indexing).
+        sequence = generate_sequence_a140106(starting_n=1)
+        self.assertEqual(next(sequence), sequence_0)
+        self.assertEqual(next(sequence), sequence_1)
+        self.assertEqual(next(sequence), sequence_2)
+
+    def test_generate_sequence_a140106_with_start_2(self):
+        sequence = generate_sequence_a140106()
+        sequence_0 = next(sequence)
+        sequence_1 = next(sequence)
+        sequence_2 = next(sequence)
+        sequence_3 = next(sequence)
+
+        self.assertEqual(sequence_0, 0)
+        self.assertEqual(sequence_1, 0)
+        self.assertEqual(sequence_2, 0)
+        self.assertEqual(sequence_3, 1)
+
+        # The sequence starts at 1 (i.e. it uses 1-based indexing).
+        sequence = generate_sequence_a140106(starting_n=1)
+        self.assertEqual(next(sequence), sequence_0)
+        self.assertEqual(next(sequence), sequence_1)
+        self.assertEqual(next(sequence), sequence_2)
+
+    def test_generate_sequence_a140106_with_start_odd(self):
+        sequence = generate_sequence_a140106()
+        sequence_0 = next(sequence)
+        sequence_1 = next(sequence)
+        sequence_2 = next(sequence)
+        sequence_3 = next(sequence)
+        sequence_4 = next(sequence)
+        sequence_5 = next(sequence)
+        sequence_6 = next(sequence)
+        sequence_7 = next(sequence)
+
+        self.assertEqual(sequence_0, 0)
+        self.assertEqual(sequence_1, 0)
+
+        # The sequence starts at 1 (i.e. it uses 1-based indexing).
+        sequence = generate_sequence_a140106(starting_n=3)
+        self.assertEqual(next(sequence), sequence_2)
+        self.assertEqual(next(sequence), sequence_3)
+        self.assertEqual(next(sequence), sequence_4)
+        self.assertEqual(next(sequence), sequence_5)
+        self.assertEqual(next(sequence), sequence_6)
+        self.assertEqual(next(sequence), sequence_7)
+
+def test_generate_sequence_a140106_with_start_odd(self):
+        sequence = generate_sequence_a140106()
+        sequence_0 = next(sequence)
+        sequence_1 = next(sequence)
+        sequence_2 = next(sequence)
+        sequence_3 = next(sequence)
+        sequence_4 = next(sequence)
+        sequence_5 = next(sequence)
+        sequence_6 = next(sequence)
+        sequence_7 = next(sequence)
+
+        self.assertEqual(sequence_0, 0)
+        self.assertEqual(sequence_1, 0)
+        self.assertEqual(sequence_2, 0)
+
+        # The sequence starts at 1 (i.e. it uses 1-based indexing).
+        sequence = generate_sequence_a140106(starting_n=4)
+        self.assertEqual(next(sequence), sequence_3)
+        self.assertEqual(next(sequence), sequence_4)
+        self.assertEqual(next(sequence), sequence_5)
+        self.assertEqual(next(sequence), sequence_6)
+        self.assertEqual(next(sequence), sequence_7)
 
 
 if __name__ == '__main__':
