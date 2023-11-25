@@ -107,6 +107,15 @@ class Lines:
         self._lines.append(self._current_line)
         self._current_line = []
 
+    @property
+    def last_point(self):
+        return self._current_line[-1]
+
+    @property
+    def last_point_without_offset(self):
+        x, y = self._current_line[-1]
+        return x - self.offset_x, y - self.offset_y
+
 
 def draw_functions():
     """The draw functions build a series of line segments using Lines."""
@@ -128,10 +137,20 @@ def draw_functions():
         lines.add_to_current_line(x, y)
 
     def quadratic_to(c1x, c1y, x, y, lines):
-        #buffer_list.append(f"Q{c1x},{c1y} {x},{y}")
-        # TODO: Ignore the control points just put the line point.
-        # The idea would be to smooth the curve and generate N points along it.
-        lines.add_to_current_line(x, y)
+
+        def bezier_formula_quadratic(start, t):
+            start_x, start_y = start
+            return (
+                (1 - t) * (1 - t) * start_x + 2 * (1 - t) * t * c1x + t * t * x,
+                (1 - t) * (1 - t) * start_y + 2 * (1 - t) * t * c1y + t * t * y,
+            )
+
+        start_x, start_y = lines.last_point_without_offset
+        division = 10
+        for i in range(1, division):
+            new_x, new_y = bezier_formula_quadratic(
+                (start_x, start_y), i / division)
+            lines.add_to_current_line(new_x, new_y)
 
     functions = uharfbuzz.DrawFuncs()
     functions.set_move_to_func(move_to)
