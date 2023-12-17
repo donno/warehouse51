@@ -99,6 +99,31 @@ def pandas_address_view(base_directory, filter_to_locality=None):
     return merged
 
 
+def with_mesh_block(base_directory, address_view):
+    """Return the address view with the mesh block data included.
+
+    This is currently limited to South Australia.
+    The data files are separated based on states and territories.
+
+    base_directory: The directory that contains the G-NAF data.
+                    It should contain 'Standard' and 'Authority Code' folders.)
+    """
+    address_mesh_block_file = os.path.join(
+        base_directory, 'Standard', 'SA_ADDRESS_MESH_BLOCK_2021_psv.psv')
+
+    mesh_block_columns = [
+        "ADDRESS_DETAIL_PID", "MB_2021_PID",
+    ]
+
+    mesh_block_files = pandas.read_csv(address_mesh_block_file,
+                                       sep='|',
+                                       usecols=mesh_block_columns)
+
+    return address_view.join(
+        mesh_block_files.set_index('ADDRESS_DETAIL_PID'),
+        on='ADDRESS_DETAIL_PID')
+
+
 def _address(row):
     flat_prefix = row['FLAT_NUMBER'] + '/' if row['FLAT_NUMBER'] else ''
     if row['FLAT_NUMBER'] and row['FLAT_TYPE_CODE'] == 'SHOP':
