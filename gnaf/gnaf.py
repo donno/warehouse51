@@ -102,6 +102,9 @@ def pandas_address_view(base_directory, filter_to_locality=None):
 def with_mesh_block(base_directory, address_view):
     """Return the address view with the mesh block data included.
 
+    A mesh block is the smallest geographic areas defined by the Australian
+    Bureau of Statistics (ABS) and forms larger building block.
+
     This is currently limited to South Australia.
     The data files are separated based on states and territories.
 
