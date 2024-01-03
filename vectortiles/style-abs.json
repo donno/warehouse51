@@ -1,0 +1,155 @@
+{
+    "id": "43f36e14-e3f5-43c1-84c0-50a9c80dc5c7",
+    "name": "ABS Vector Tiles",
+    "zoom": 0.8619833357855968,
+    "pitch": 0,
+    "center": [
+        17.65431710431244,
+        32.954120326746775
+    ],
+    "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    "sprite": "https://openmaptiles.github.io/osm-bright-gl-style/sprite",
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "#D8F2FF"
+            },
+            "filter": [
+                "all"
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "maxzoom": 24
+        },
+        {
+            "id": "water",
+            "type": "fill",
+            "metadata": {
+              "mapbox:group": "1444849382550.77"
+            },
+            "source": "australia",
+            "source-layer": "water",
+            "filter": [
+              "all",
+              [
+                "!=",
+                "intermittent",
+                1
+              ],
+              [
+                "!=",
+                "brunnel",
+                "tunnel"
+              ]
+            ],
+            "layout": {
+              "visibility": "visible"
+            },
+            "paint": {
+              "fill-color": "hsl(210, 67%, 85%)"
+            }
+          },
+          {
+            "id": "water-pattern",
+            "type": "fill",
+            "metadata": {
+              "mapbox:group": "1444849382550.77"
+            },
+            "source": "australia",
+            "source-layer": "water",
+            "filter": [
+              "all"
+            ],
+            "layout": {
+              "visibility": "visible"
+            },
+            "paint": {
+              "fill-pattern": "wave",
+              "fill-translate": [
+                0,
+                2.5
+              ]
+            }
+          },
+          {
+            "id": "state-fill",
+            "type": "fill",
+            "paint": {
+                "fill-color": [
+                    "match",
+                    ["get", "state_code"],
+                    ["5"],
+                    "#D6C7FF",
+                    ["4"],
+                    "#EBCA8A",
+                    ["1"],
+                    "#C1E599",
+                    ["2"],
+                    "#E7E58F",
+                    ["3"],
+                    "#98DDA1",
+                    ["7", "8", "9"],
+                    "#83D5F4",
+                    ["6"],
+                    "#B1BBF9",
+                    "#FF0000"
+                  ]
+            },
+            "filter": [
+                "all"
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "source": "australia",
+            "maxzoom": 24,
+            "source-layer": "states_and_territories"
+        },
+        {
+            "id": "state-outline",
+            "type": "line",
+            "paint": {
+                "line-color": "#198EC8"
+            },
+            "filter": [
+                "all"
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "source": "australia",
+            "maxzoom": 24,
+            "source-layer": "states_and_territories"
+        },
+        {
+            "id": "sa4-outline",
+            "type": "line",
+            "paint": {
+                "line-color": "#000000"
+            },
+            "filter": [
+                "all"
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "source": "australia",
+            "maxzoom": 24,
+            "source-layer": "statistical_areas_level_4"
+        }
+    ],
+    "bearing": 0,
+    "sources": {
+        "australia": {
+            "url": "http://localhost:3000/australia",
+            "type": "vector"
+        }
+    },
+    "version": 8,
+    "metadata": {
+        "styleeditor:comment": "Style created by Donno for the ABS geometry."
+    }
+}
