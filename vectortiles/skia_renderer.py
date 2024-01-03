@@ -30,7 +30,7 @@ class TileRenderer(vectortiles.TileVisitor):
 
     def __init__(self, canvas) -> None:
         super().__init__()
-        self.layer_count = 0
+        self.layer_stack = []
 
         # At the moment assume everything is going to be drawn on a single
         # canvas. I don't know if skia has a type that can preserve the layers.
@@ -102,11 +102,11 @@ class TileRenderer(vectortiles.TileVisitor):
         )
 
     def enter_layer(self, name: str, version: int, extent: int):
-        self.layer_count += 1
-        #print(self.canvas.width)
+        self.layer_stack.append(name)
 
     def leave_layer(self, name: str):
-        pass
+        layer = self.layer_stack.pop()
+        assert layer == name, "The layer that was left should match last layer."
 
     def feature(self, feature_type: int, attributes: dict, geometry):
         if feature_type == vectortiles.GeometryType.POINT:
