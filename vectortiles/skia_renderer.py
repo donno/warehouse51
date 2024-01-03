@@ -13,6 +13,7 @@ Alternative:
     mbgl-render from https://github.com/maplibre/maplibre-native/
 
 """
+from __future__ import annotations
 
 import argparse
 import skia
@@ -181,14 +182,25 @@ def render(path: str, tile_coordinates: dict):
 
         with vectortiles.MBTiles(path) as src:
             assert src.meta['format'] == 'pbf'
+
+            min_zoom, max_zoom = src.meta['minzoom'], src.meta['maxzoom']
+
             print(src.meta)
+
+            if any([tile_coordinates['z'] < int(min_zoom),
+                    tile_coordinates['z'] > int(max_zoom)]):
+                raise ValueError("Metadata of the mbtiles file states the "
+                                 f"given zoom level ({tile_coordinates['z']}) "
+                                 f"is not within the file's range ({min_zoom},"
+                                 f"{max_zoom})")
+
             tile = src.tile(**tile_coordinates)
             if tile:
                 vectortiles.process_tile(
                     vectortiles.read_vector_tile(tile),
                     tile_renderer)
             else:
-                raise ValueError('No tile')
+                raise ValueError(f"No tile {tile_coordinates}")
 
     image = surface.makeImageSnapshot()
     image.save('output.png', skia.kPNG)
@@ -196,6 +208,7 @@ def render(path: str, tile_coordinates: dict):
 if __name__ == '__main__':
     # A hardcoded default to make developing easier for myself.
     SOUTH_KOREA = r'G:\GeoData\Source\OpenStreetMap\derived\S_Korea.mbtiles'
+    ADELAIDE = r'G:\GeoData\Generated\OpenStreetMap\adelaide-2023-12-28.mbtiles'
 
     parser = argparse.ArgumentParser(
         description='Render a vector tile from a mbtiles file using Skia.',
@@ -204,11 +217,47 @@ if __name__ == '__main__':
         'mbtiles',
         nargs='?',
         help='The path to the mbtiles file.',
-        default=SOUTH_KOREA)
+        default=ADELAIDE)
 
-    # TODO: Add argument to specific the tile coordinates.
-    tile_coordinates = dict(z=13, x=6987, y=5010)
+    parser.add_argument(
+        '--zoom',
+        type=int,
+        default=10,
+        help="The zoom level to render."
+    )
 
     arguments = parser.parse_args()
+
+    # TODO: Add argument to specific the tile coordinates.
+    #tile_coordinates = dict(z=13, x=6987, y=5010)
+
+    # For determining coordinates visually (rather than by going from
+    # lat/long) use: https://tools.geofabrik.de/map/?grid=1#2/29.1466/31.9609
+    #
+    # The following is West Terrace / South Terrace of the City of Adelaide.
+    #
+    # This is what the wgs84_to_tile_index() confirms as well.
+    # See https://gis.stackexchange.com/a/116321
+    tile_coordinates = vectortiles.wgs84_to_tile_index(
+        -34.927144,138.600809, zoom=arguments.zoom)
+
+    # Both wgs84_to_tile_index() and the above produce wrong for the typical
+    # MBTiles orientation, lets fix (this is where a separate class might be
+    # handy that can represent either coordinates systems)
+    #
+    # This is noted in the MBTiles 1.3 specification:
+    # > Note that in the TMS tiling scheme, the Y axis is reversed from the
+    # > "XYZ" coordinate system commonly used in the URLs to request individual
+    # > tiles, so the tile commonly referred to as 11/327/791 is inserted as
+    # > zoom_level 11, tile_column 327, and tile_row 1256, since 1256 is
+    # > 2^11 - 1 - 791.
+    tile_coordinates["y"] = (
+        (1 << tile_coordinates["z"]) - tile_coordinates["y"] - 1
+    )
+
+
     render(arguments.mbtiles, tile_coordinates)
 
+
+# Australia
+# 106.4365 -44.7604 158.0176 -6.3546
