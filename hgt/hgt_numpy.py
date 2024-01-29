@@ -45,3 +45,14 @@ def read_hgt_points(hgt_path):
     heights = numpy.array(hgt.read_hgt(hgt_path)).reshape(size, -1)
     positions[:,2] = numpy.flip(heights, 0).ravel()
     return positions
+
+
+def read_hgt_heights_2d(hgt_path):
+    """Read a HGT (height) file as a 2D numpy array of the form (M * M).
+
+    Returns a 2D numpy array with shape (M, M) where M is the size of the 
+    HGT in one direction (which would be 3601 or 1201).
+    """
+    size = hgt.size_hgt(hgt_path)
+    heights = numpy.array(hgt.read_hgt(hgt_path)).reshape(size, -1)
+    return numpy.flip(heights, 0)
