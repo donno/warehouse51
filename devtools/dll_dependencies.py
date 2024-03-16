@@ -3,6 +3,7 @@
 Build a graph of those dependencies.
 """
 
+import enum
 import json
 import os
 import pathlib
@@ -12,6 +13,7 @@ import zipfile
 
 WORK_DIRECTORY = pathlib.Path("work_area")
 TOOL_DOWNLOAD_URI = "https://github.com/lucasg/Dependencies/releases/download/v1.11.1/Dependencies_x64_Release.zip"
+GRAPHVIZ_DOWNLOAD_URI = "https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/10.0.1/windows_10_cmake_Release_Graphviz-10.0.1-win64.zip"
 
 
 class Graph:
@@ -147,6 +149,95 @@ def find_dependencies(
     return Graph.merge(graphs)
 
 
+class GraphOutputType(enum.Enum):
+    DOT = 1
+    """DOT format with the layout computed."""
+
+    PNG = 2
+    """Portable network graphics, a raster format."""
+
+
+def render_graph(
+    graph: Graph,
+    output_type: GraphOutputType,
+    output_path: pathlib.Path,
+    work_directory: pathlib.Path,
+    *,
+    perform_transitive_reduction: bool = False,
+) -> pathlib.Path:
+    """Render the given graph to an image with GraphViz.
+
+    If perform_transitive_reduction is True, then the graph input is ran
+    through GraphViz's tred tool to perform a transitive reduction.)
+    """
+
+    def _setup_tooling() -> pathlib.Path:
+        work_directory.mkdir(exist_ok=True)
+
+        tool_zip = work_directory / "graphviz.zip"
+        if not tool_zip.exists():
+            urllib.request.urlretrieve(GRAPHVIZ_DOWNLOAD_URI, filename=tool_zip)
+        executable = work_directory / "Graphviz-10.0.1-win64" / "bin" / "dot.exe"
+        if not executable.is_file():
+            with zipfile.ZipFile(tool_zip) as opened_zip:
+                opened_zip.extractall(work_directory)
+        return executable
+
+    dot_exe = _setup_tooling()
+    tred_exe = dot_exe.parent / "tred.exe"
+
+    if perform_transitive_reduction:
+        process = subprocess.Popen(
+            [
+                os.fspath(tred_exe),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            encoding="utf-8",
+        )
+        graph.to_dot(process.stdin)
+
+        process.stdin.close()
+
+        post_tred_dot = ''.join(process.stdout)
+        process.wait()
+        process.stdout.close()
+        if process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, process.args)
+
+
+    type_to_format = {
+        GraphOutputType.DOT: "dot",
+        GraphOutputType.PNG: "png",
+    }
+
+    # This could be based purely on the output_path suffix.
+    target_format = type_to_format[output_type]
+
+    process = subprocess.Popen(
+        [
+            os.fspath(dot_exe),
+            f"-T{target_format}",
+            "-o",
+            os.fspath(output_path),
+        ],
+        stdin=subprocess.PIPE,
+        encoding="utf-8",
+    )
+
+    if perform_transitive_reduction:
+        process.stdin.write(post_tred_dot)
+    else:
+        graph.to_dot(process.stdin)
+    process.stdin.close()
+    process.wait()
+
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, process.args)
+
+    return output_path
+
+
 def _dependencies_chain_to_graph(
     chain_json: dict,
     *,
@@ -160,9 +251,11 @@ def _dependencies_chain_to_graph(
     dependencies_to_check = [chain_json["Root"]]
 
     def _exclude_depend(depend: dict):
-        return (exclude_system_dlls
-                and depend["Filepath"]
-                and depend["Filepath"].startswith("C:\\Windows\\"))
+        return (
+            exclude_system_dlls
+            and depend["Filepath"]
+            and depend["Filepath"].startswith("C:\\Windows\\")
+        )
 
     graph = Graph()
     visited = set()
@@ -187,6 +280,21 @@ def example(directory: pathlib.Path) -> Graph:
     dlls = [entry for entry in directory.iterdir() if entry.name.endswith(".dll")]
     graph = find_dependencies(dlls, work_directory)
 
+    render_graph(
+        graph,
+        GraphOutputType.PNG,
+        work_directory / "example.png",
+        work_directory,
+    )
+
+    render_graph(
+        graph,
+        GraphOutputType.PNG,
+        work_directory / "example_post_tred.png",
+        work_directory,
+        perform_transitive_reduction=True,
+    )
+
     with (work_directory / "depend.dot").open("w") as writer:
         graph.to_dot(writer)
     with (work_directory / "depend.json").open("w") as writer:
@@ -195,10 +303,10 @@ def example(directory: pathlib.Path) -> Graph:
 
 
 # Considerations:
-# - Intergrate graphviz to use its tred (transitive reduction program) as for
-#   DLLs which have lots of reuse the graphs can become very busy.
-#   Or use NetworkX:
+# - Instead of relying on GraphViz's tred program, use NetworkX instead:
 #   https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.dag.transitive_reduction.html
 
 if __name__ == "__main__":
+    # TODO: Since this can now fetch GraphViz, that could be used here as the
+    # example.
     example(pathlib.Path(r"D:\Programs\Development\Graphviz\bin"))
