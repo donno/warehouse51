@@ -163,7 +163,7 @@ class GraphOutputType(enum.Enum):
 
 
 def render_graph(
-    graph: Graph,
+    graph: Graph | str,
     output_type: GraphOutputType,
     output_path: pathlib.Path,
     work_directory: pathlib.Path,
@@ -172,8 +172,10 @@ def render_graph(
 ) -> pathlib.Path:
     """Render the given graph to an image with GraphViz.
 
+    graph can be the Graph type or a string containing the DOT format.
+
     If perform_transitive_reduction is True, then the graph input is ran
-    through GraphViz's tred tool to perform a transitive reduction.)
+    through GraphViz's tred tool to perform a transitive reduction).
     """
 
     def _setup_tooling() -> pathlib.Path:
@@ -200,7 +202,11 @@ def render_graph(
             stdout=subprocess.PIPE,
             encoding="utf-8",
         )
-        graph.to_dot(process.stdin)
+
+        if isinstance(graph, str):
+            process.stdin.write(graph)
+        else:
+            graph.to_dot(process.stdin)
 
         process.stdin.close()
 
@@ -232,6 +238,8 @@ def render_graph(
 
     if perform_transitive_reduction:
         process.stdin.write(post_tred_dot)
+    elif isinstance(graph, str):
+        process.stdin.write(graph)
     else:
         graph.to_dot(process.stdin)
     process.stdin.close()
