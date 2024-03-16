@@ -133,7 +133,12 @@ def find_dependencies(
                 chain_as_json = json.load(reader)
         else:
             output = subprocess.check_output(
-                [os.fspath(tool_exe), "-json", "-depth", "2", "-chain", os.fspath(dll)],
+                [
+                    os.fspath(tool_exe),
+                    "-json",
+                    "-depth", "2",
+                    "-chain", os.fspath(dll),
+                ],
                 text=True,
             )
 
@@ -291,6 +296,15 @@ def example(directory: pathlib.Path) -> Graph:
         graph,
         GraphOutputType.PNG,
         work_directory / "example_post_tred.png",
+        work_directory,
+        perform_transitive_reduction=True,
+    )
+
+    # This version is used by graph_dependencies.html.
+    render_graph(
+        graph,
+        GraphOutputType.DOT,
+        work_directory / "depends.dot",
         work_directory,
         perform_transitive_reduction=True,
     )

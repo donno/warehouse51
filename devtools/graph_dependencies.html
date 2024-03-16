@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Library Dependency Reporter</title>
+  <script type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+
+  <style type="text/css">
+    #mynetwork {
+      width: 1920px;
+      height: 1024px;
+      border: 1px solid lightgray;
+    }
+  </style>
+</head>
+
+<body>
+  <p>
+    Provide a summary of what you are looking at here.
+  </p>
+
+  <div id="mynetwork"></div>
+
+  <script type="text/javascript">
+    // create a network
+    var nodes = new vis.DataSet();
+    var edges = new vis.DataSet();
+    var container = document.getElementById("mynetwork");
+    var data = {
+      nodes: nodes,
+      edges: edges,
+    };
+    var options = {
+      height: '100%',
+      width: '100%',
+      locale: 'en',
+      nodes: {
+        shape: "box",
+      },
+      physics: {
+        stabilization: false,
+        barnesHut: {
+          springLength: 200,
+        },
+        repulsion: {
+          centralGravity: 0.2,
+          springLength: 600,
+          springConstant: 0.05,
+          nodeDistance: 1000,
+          damping: 0.09
+        },
+        stabilization: {
+          enabled: true,
+          iterations: 1000,
+          updateInterval: 100,
+          onlyDynamicEdges: false,
+          fit: true
+        },
+      },
+    };
+
+    function redrawGraph(parsedGraph) {
+      nodes.clear();
+      edges.clear();
+      nodes.add(parsedGraph.nodes);
+      edges.add(parsedGraph.edges);
+      network.fit(); // zoom to fit
+    }
+
+    var useJson = false;
+    if (useJson)
+    {
+      fetch("work_area/depend.json").then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        response.json().then(
+          (jsonData) => {
+            var parsed = vis.parseGephiNetwork(jsonData, {
+              fixed: false,
+            });
+            redrawGraph(parsed);
+          }
+        )
+      });
+    }
+    else
+    {
+      // Use DOT
+      fetch("work_area/depends.dot").then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        response.text().then(
+          (textData) => {
+            var parsed = vis.parseDOTNetwork(textData);
+
+            // Adjust the label if it is \N which means use the nodes.
+            //
+            // This works around:
+            // https://github.com/visjs-community/visjs-network/issues/100
+            parsed.nodes.forEach(element => {
+              // As per https://graphviz.org/docs/attrs/label/ a value of
+              // \N is meant to mean use the node's ID or name as the label.
+              if (element.label === "\\N")
+              {
+                element.label = element.id;
+              }
+            });
+            redrawGraph(parsed);
+          }
+        )
+      });
+    }
+
+    var network = new vis.Network(container, data, options);
+  </script>
+</body>
+
+</html>
