@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+#
+# This builds the container image for publishing a file/folder to a torrent
+# tracker.
+#
+# It is meant to be used to upload the file that can then be pulled down.
+#
+# It likely will need some reworking as someone needs to be the first seed of
+# the file.
+
+FROM alpine:3.19.1
+# The default mirror/CDN Fastly has issues with MTU size.
+# https://github.com/gliderlabs/docker-alpine/issues/307#issuecomment-427256504
+# To work around this, pull from a mirror in my home country.
+RUN rm -f /etc/apk/repositories  && apk add mktorrent --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/main --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/community
+
+ADD create_torrents.sh /
+WORKDIR /torrents
+ENTRYPOINT [ "/create_torrents.sh", "/sources", "/torrents" ]

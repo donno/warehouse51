@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1
+FROM alpine:3.19.1
+# The default mirror/CDN Fastly has issues with MTU size.
+# https://github.com/gliderlabs/docker-alpine/issues/307#issuecomment-427256504
+# To work around this, pull from a mirror in my home country.
+RUN rm -f /etc/apk/repositories && apk add opentracker --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/main --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/community
+
+EXPOSE 6969
+ENTRYPOINT [ "/usr/bin/opentracker" ]

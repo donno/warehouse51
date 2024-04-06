@@ -1,0 +1,44 @@
+#############################################################################
+# A rTorrent configuration that provides the basic features
+#############################################################################
+
+## Instance layout (base paths)
+method.insert = cfg.basedir,  private|const|string, (cat,"/root/rtorrent/")
+method.insert = cfg.download, private|const|string, (cat,(cfg.basedir),"download/")
+method.insert = cfg.logs,     private|const|string, (cat,(cfg.basedir),"log/")
+method.insert = cfg.logfile,  private|const|string, (cat,(cfg.logs),"rtorrent-",(system.time),".log")
+method.insert = cfg.session,  private|const|string, (cat,(cfg.basedir), "session/")
+method.insert = cfg.watch,    private|const|string, (cat,(cfg.basedir),"watch/")
+
+## Create instance directories
+execute.throw = sh, -c, (cat,\
+    "mkdir -p \"",(cfg.download),"\" ",\
+    "\"",(cfg.logs),"\" ",\
+    "\"",(cfg.session),"\" ",\
+    "\"",(cfg.watch),"/load\" ",\
+    "\"",(cfg.watch),"/start\" ")
+
+session.path.set = (cat, (cfg.session))
+directory.default.set = (cat, (cfg.download))
+
+# Enable the RPC socket.
+network.scgi.open_local = (cat,(session.path),rpc.socket)
+
+## Watch directories (add more as you like, but use unique schedule names)
+## Add torrent
+schedule2 = watch_load, 11, 10, ((load.verbose, (cat, (cfg.watch), "load/*.torrent")))
+## Add & download straight away
+schedule2 = watch_start, 10, 10, ((load.start_verbose, (cat, (cfg.watch), "start/*.torrent")))
+
+log.execute = (cat, (cfg.logs), "execute.log")
+log.xmlrpc = (cat, (cfg.logs), "xmlrpc.log")
+
+# Don't want to actually use DHT at this stage as it will try to seed and
+# download from the Internet.
+dht.mode.set = disable
+
+protocol.pex.set = no
+
+print = (cat, "Logging to ", (cfg.logfile))
+log.open_file = "log", (cfg.logfile)
+log.add_output = "info", "log"

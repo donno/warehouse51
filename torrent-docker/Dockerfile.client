@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+FROM alpine:3.19.1 as client
+# The default mirror/CDN Fastly has issues with MTU size.
+# https://github.com/gliderlabs/docker-alpine/issues/307#issuecomment-427256504
+# To work around this, pull from a mirror in my home country.
+RUN rm -f /etc/apk/repositories && apk add rtorrent --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/main --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/community
+ADD .rtorrent.rc /root
+CMD [ "/usr/bin/rtorrent", \
+      "-o", "system.daemon.set=true", \
+      "-o", "directory.default.set=/downloads" ]
+
+FROM client as seeder
+EXPOSE 5000
+CMD [ "/usr/bin/rtorrent", "-o", "system.daemon.set=true" ]
+#It does not seem like this can overwrite the variables:
+#   "-o", "directory.default.set=/downloads"
+
+FROM client as seeder-webui
+# Install npm and flood a web-ui for rtorrent.
+# 
+# While this might be able to use a seperate container that can connect to the
+# RPC from the seeder container, for example: jesec/flood, based on the example
+# it seems like the idea that might work is create a volume "rpc_sockets" which
+# each client could write their socket into and then one flood could serve all
+RUN apk add npm --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/main --repository http://mirror.aarnet.edu.au/pub/alpine/v3.19/community && npm install --global flood
+# exec npx flood in the container afterwards.
+EXPOSE 3000
+CMD [ "/usr/bin/rtorrent", "-o", "system.daemon.set=true" ]
