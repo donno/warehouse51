@@ -80,21 +80,19 @@ services:
     depends_on:
       - seeder
 
-  #leachers:
+  leachers:
     # This only has the torrents and no sources.
-    # build:
-    #   dockerfile: dockerfile
-    #   target: client
-    # volumes:
-    #   # This could be shared volume.
-    #   - torrents:/torrents
+    build:
+      dockerfile: Dockerfile.client
+      target: client
+    volumes:
+      - torrents:/root/rtorrent/watch/start
 
 # dockerfile_inline can be used to include the dockerfile inline.
 
 volumes:
   torrents:
     # This volume contains the list of all available torrents.
-
 
 # TODO: Create a seperate network which doesn't have access to the host's
 # network or the internet.
