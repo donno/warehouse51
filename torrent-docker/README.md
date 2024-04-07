@@ -47,6 +47,16 @@ DONE
 - Created a container and service that seeds the file or at least it almost
   does. I sure it won't quite work due to the ports not being open to allow the
   leaches to connect.
+- Figure out a way to monitor it. Currently using Flood is a nice way to see
+  the torrent status themselves.
+  - As mentioned below storing the sockets in a volume didn't work. I must be
+    misunderstanding how volumes work.
+  - Binding on the port did work - I would like it to be easier to opt-in/out
+    of but for now while I get it working just leave it working.
+  - Limitation is FLood needs access to the actual files for the download to
+    work so because they are on a different instance it doesn't work.
+    The workaround is to volume mount the sources to the container so it does
+    have access to the original files.
 
 TODO
 ----
@@ -55,8 +65,11 @@ TODO
     - The easily idea is to have one service "seeder" and the reset are
       "leachers".
     - The future way would be to have each client pick a file to seed.
-- Figure out a way to monitor it. Currently using Flood is a nice way to see
-  the torrent statue themselves.
+- seeder-ui
+  - The creation of the accounts in Flood for each leacher and seeder would be
+    good to automate.
+  - Limitation is FLood needs access to the actual files for the download to
+    work.
 - Set-up the system to run on its own network.
 
 Other things
@@ -64,7 +77,7 @@ Other things
 
 - Initial mistake - missed the /announce on the tracker URL.
 - The issue with the container saying "error opening terminal" was because it
-  needs to be run in daemon mode rather than use the ncurse UI as that doesn't
+  needs to be run in daemon mode rather than use the ncurses UI as that doesn't
   work when there is not an interactive session. The alternative would have
   been to run it in tmux.
 - The challenge was getting rtorrent to load the torrents for the seeder. In
@@ -75,9 +88,12 @@ Other things
 - Tried out Flood as a web UI. Worked well but for now running it in same
   container as rtorrent.
   - This has some potential for being quite neat for monitoring the set-up.
-  - The future idea would be create a "volume" which ahs all the rpc sockets
-    that each rtorrent instance has its own file and then start one flood UI
-    that can access them all.
+- The idea of having a volume which contained an RPC socket for each rtorrent
+  client didn't work. I think the best thing to do there would be to use the 
+  TCP option. Ideally make it opt-in.
+  ```
+  network.scgi.open_local = (cat, /rpc_sockets/rpc_, (system.env, HOSTNAME), .socket)
+  ```
 
 [0]: https://erdgeist.org/arts/software/opentracker/
 [1]: https://github.com/pobrn/mktorrent

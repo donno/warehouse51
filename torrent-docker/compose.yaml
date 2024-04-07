@@ -26,12 +26,14 @@ services:
     # This creates a container that seeds the torrents.
     build:
       dockerfile: Dockerfile.client
-      # Use seeder-webui for interactive testing/development.
-      #target: seeder
-      target: seeder-webui
+      # Use seeder-webui for interactive testing/development. It has flood
+      # installed in it. It just needs to be started within the container.
+      #target: seeder-webui
+      target: seeder
 
-    ports:
-      - "3000:3000"
+    # When seeder-webui is used then the UI port needs to be open.
+    #ports:
+    #  - "3000:3000"
 
     depends_on:
       - tracker
@@ -61,7 +63,6 @@ services:
       # This is where rtorrent will watch for new torrents to seed.
       - torrents:/root/rtorrent/watch/start
 
-  # This doesn't currently work.
   seeder-ui:
     # This creates a container with a web-ui for interacting with the seeder
     image: jesec/flood
@@ -69,16 +70,16 @@ services:
     profiles:
       - debug
 
-    command:
-      - --auth=none
-      - --rthost seeder
-      - --rtport 5000
-
     ports:
       - "3000:3000"
 
     depends_on:
       - seeder
+
+    volumes:
+      # This allows the files to be downloaded from Flood interface for the
+      # more complete experience.
+      - ./sources:/root/rtorrent/download
 
   leachers:
     # This only has the torrents and no sources.

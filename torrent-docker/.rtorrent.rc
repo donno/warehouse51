@@ -22,7 +22,12 @@ session.path.set = (cat, (cfg.session))
 directory.default.set = (cat, (cfg.download))
 
 # Enable the RPC socket.
-network.scgi.open_local = (cat,(session.path),rpc.socket)
+# Can't have this enabled if we going to use the open port option.
+#network.scgi.open_local = (cat,(session.path),rpc.socket)
+
+# Determine if an environment variable was set to say
+# (system.env, "ENABLE_RPC_ON_PORT) then set:
+## network.scgi.open_port = 127.0.0.1:5000
 
 ## Watch directories (add more as you like, but use unique schedule names)
 ## Add torrent
