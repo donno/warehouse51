@@ -23,7 +23,7 @@ CMD [ "/usr/bin/rtorrent", \
 # target.
 FROM client as seeder-webui
 # Install npm and flood a web-ui for rtorrent.
-# 
+#
 # While this might be able to use a seperate container that can connect to the
 # RPC from the seeder container, for example: jesec/flood, based on the example
 # it seems like the idea that might work is create a volume "rpc_sockets" which

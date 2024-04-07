@@ -7,6 +7,10 @@ services:
     ports:
       - "6969:6969"
 
+    networks:
+      - frontend
+      - torrenting
+
   publish:
     # This creates the torrents.
     build:
@@ -21,6 +25,9 @@ services:
 
     environment:
       ANNOUNCE_URL: http://tracker:6969/announce
+
+    # This does not need a network as it doesn't communicate with the tracker.
+    network_mode: none
 
   seeder:
     # This creates a container that seeds the torrents.
@@ -46,6 +53,9 @@ services:
       # This is where rtorrent will watch for new torrents to seed.
       - torrents:/root/rtorrent/watch/start
 
+    networks:
+      - torrenting
+
   seeder-secondary:
     # This creates a second container that seeds the torrents.
     build:
@@ -62,6 +72,9 @@ services:
 
       # This is where rtorrent will watch for new torrents to seed.
       - torrents:/root/rtorrent/watch/start
+
+    networks:
+      - torrenting
 
   seeder-ui:
     # This creates a container with a web-ui for interacting with the seeder
@@ -81,6 +94,10 @@ services:
       # more complete experience.
       - ./sources:/root/rtorrent/download
 
+    networks:
+      - frontend # Talk to the host
+      - torrenting  # Talk to the torrent clients
+
   leachers:
     # This only has the torrents and no sources.
     build:
@@ -92,13 +109,23 @@ services:
       mode: replicated
       replicas: 10
 
+    networks:
+      - torrenting
+
 # dockerfile_inline can be used to include the dockerfile inline.
 
 volumes:
   torrents:
     # This volume contains the list of all available torrents.
 
-# TODO: Create a seperate network which doesn't have access to the host's
-# network or the internet.
-# networks:
-#   torrenting:
+networks:
+  frontend:
+    # This network currently has access to the Internet but doesn't need it.
+    # It simply needs to allow the host to access it to be able to query either
+    # the tracker (not really required) or the seeder-ui (Flood).
+
+  torrenting:
+    # This network does not have access to the outside world. This meants it
+    # can't acccidently use DHT to pull the files from another machine on the
+    # Internet.
+    internal: true

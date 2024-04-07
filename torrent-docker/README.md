@@ -57,6 +57,7 @@ DONE
     work so because they are on a different instance it doesn't work.
     The workaround is to volume mount the sources to the container so it does
     have access to the original files.
+- Set-up the system to run on its own network.
 
 TODO
 ----
@@ -70,11 +71,11 @@ TODO
     good to automate.
   - Limitation is FLood needs access to the actual files for the download to
     work.
-- Set-up the system to run on its own network.
+- Refine if the frontend network requires to be external or not (i.e. access
+  the Internet).
 
 Other things
 ------------
-
 - Initial mistake - missed the /announce on the tracker URL.
 - The issue with the container saying "error opening terminal" was because it
   needs to be run in daemon mode rather than use the ncurses UI as that doesn't
