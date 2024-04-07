@@ -1,4 +1,4 @@
-# The documetnation for the specification for this file is avaliable at:
+# The documentation for the specification for this file is avaliable at:
 # https://github.com/compose-spec/compose-spec/blob/master/spec.md
 services:
   tracker:
@@ -87,6 +87,9 @@ services:
       target: client
     volumes:
       - torrents:/root/rtorrent/watch/start
+    deploy:
+      mode: replicated
+      replicas: 10
 
 # dockerfile_inline can be used to include the dockerfile inline.
 
