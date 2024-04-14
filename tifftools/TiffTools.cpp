@@ -625,6 +625,10 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
             auto noDataValue = local::NoDataValue<float>(Tiff);
             local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
+        else if (bitsPerSample == 64)
+        {
+            noDataValueDouble = local::NoDataValue<double>(Tiff);
+        }
         else
         {
             fprintf(stderr, "Expected 32-bits per sample (32-bit IEEE Float) "
