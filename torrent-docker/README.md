@@ -31,6 +31,15 @@ Example
   Or
     `docker compose up`
 
+The current set-up creates a tracker, two seeders, the leaches and a file
+'service' which creates torrents for the files in sources. Using the debug
+profile, will start a web-ui that can be used to connect to the leachers or
+seeders to see how much they have downloaded and uploaded.
+
+Ideally, I want something better to show the system work as well as provide
+command for restaring the torrent creation so you can add new files while it
+is running.
+
 How it works
 ------------
 
@@ -99,3 +108,4 @@ Other things
 [0]: https://erdgeist.org/arts/software/opentracker/
 [1]: https://github.com/pobrn/mktorrent
 [2]: https://github.com/rakshasa/rtorrent
+[3]: https://github.com/jesec/flood
