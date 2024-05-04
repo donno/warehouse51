@@ -256,17 +256,18 @@ void HGT::ForEachHeightWithIndex(
 
 #ifdef WITH_HGT_MAIN
 
-int main()
+int main(int argc, char* argv[])
 {
     try
     {
+            //"N52W008.hgt",
+        const char* filename = (argc > 1) ? argv[1] : "N03W074.hgt";
         const auto [latitude, longitude] =
-            HGT::LocationFromHgtName("N03W074.hgt");
+            HGT::LocationFromHgtName(filename);
         std::cout << latitude << ", " << longitude << std::endl;
 
         HGT::ForEachHeight(
-            "N03W074.hgt",
-            //"N52W008.hgt",
+            filename,
             [](auto Height)
             {
                 std::cout << Height << "\n";
