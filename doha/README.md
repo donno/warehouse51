@@ -13,8 +13,9 @@ Tools
 
 
 ### extract_summary.py
-The appeals from 2021 had a corresponding text file with the summary, which is not
-currently used by this script.
+The appeals from 2021 had a corresponding text file with the summary, which can
+be used by this script. Several text files were manually fixed up as one was
+missing the KEYWORD: and DIGEST: prefix and a few others had invalid dates.
 
 Overall it seems the files ending in .h1.pdf and .h2.pdf are in a different
 format and the ones with the right format end in .a1.pdf or .a2.pdf.

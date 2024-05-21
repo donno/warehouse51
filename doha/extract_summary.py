@@ -31,43 +31,54 @@ class Summary:
     date: datetime.date
 
 
-def extract_summary(path: pathlib.Path) -> Summary:
+def extract_summary_from_pdf(path: pathlib.Path) -> Summary:
     """Extract the summary from PDF of an appeal board decision.
 
     This only works on older versions of the PDF which had the information.
-
-    TITLES = ["KEYWORD: ", "DIGEST: ", "CASE NO: ", "DATE: "]
     """
     pdftotext = pathlib.Path(r"D:\Programs\poppler\bin") / "pdftotext.exe"
     output = subprocess.check_output([str(pdftotext), str(path), "-"])
     lines = output.decode("utf-8").splitlines()
+    return extract_summary(lines, path)
 
-    if any(
-        [
-            lines[0] == "DEPARTMENT OF DEFENSE",
-            lines[2] == "DEPARTMENT OF DEFENSE",
-            lines[4] == "DEPARTMENT OF DEFENSE",
-        ],
-    ):
-        # It is possible to extract the date and ISCR Case number.
-        case_number = next(
-            line
-            for line in lines
-            if line.startswith(("ISCR Case No. ", "ADP Case No. "))
-        )
-        case_number = case_number.partition(". ")[-1]
-        error = f"New format (Case {case_number}) - no summary is provided "
-        error += f"for {path}"
-        raise ValueError(error)
 
+def extract_summary(lines: list[str], document_path: pathlib.Path) -> Summary:
+    """Extract the summary from the given lines.
+
+    Parameters
+    ----------
+    lines
+        The lines containing the summary
+    document_path
+        THe path to the document that the summary is for. This is the PDF file.
+    """
     # DKEYWORD appears in case 15-03162 in 2017.
+    # `KEYWORD appears in case 19-02470.h1 in 2021.
     prefix, _, keywords = lines[0].partition(": ")
-    if not prefix.startswith(("KEYWORD", "DKEYWORD")):
-        error = f"Expected to find KEYWORD on first line in {path}"
+    if not prefix.startswith(("KEYWORD", "DKEYWORD", "`KEYWORD")):
+        if len(lines) > 4 and any(
+            [
+                lines[0] == "DEPARTMENT OF DEFENSE",
+                lines[2] == "DEPARTMENT OF DEFENSE",
+                lines[4] == "DEPARTMENT OF DEFENSE",
+            ],
+        ):
+            # It is possible to extract the date and ISCR Case number.
+            case_number = next(
+                line
+                for line in lines
+                if line.startswith(("ISCR Case No. ", "ADP Case No. "))
+            )
+            case_number = case_number.partition(". ")[-1]
+            error = f"New format (Case {case_number}) - no summary is provided "
+            error += f"for {document_path}"
+            raise ValueError(error)
+
+        error = f"Expected to find KEYWORD on first line in {document_path}"
         raise ValueError(error)
 
     if not lines[1].startswith("DIGEST:"):
-        error = f"Expected to find DIGEST on second line in {path}"
+        error = f"Expected to find DIGEST on second line in {document_path}"
         raise ValueError(error)
 
     # 2020 has the space, 2019 does not.and one from 2017 had the space between
@@ -80,12 +91,21 @@ def extract_summary(path: pathlib.Path) -> Summary:
 
     # This is the keep it simple version, the other idea was to simply iterate
     # over until we see each of the titles to support the multi-line DIGEST.
-    case_number = next(line for line in lines if line.startswith(case_number_prefixes))
+
+    # If there is no case number which happens in one of the txt file summaries
+    # then default to using the name of the pdf which is typically named after
+    # the case.
+    case_number = next(
+        (line for line in lines if line.startswith(case_number_prefixes)),
+        f"CASE NO: {document_path.stem}",
+    )
+
     case_number = case_number.partition(": ")[-1].strip()
 
     date_prefix = "DATE: "
     date = next(
-        line[len(date_prefix):].strip() for line in lines
+        line[len(date_prefix) :].strip()
+        for line in lines
         if line.upper().startswith(date_prefix)
     )
 
@@ -99,7 +119,13 @@ def extract_summary(path: pathlib.Path) -> Summary:
         # error = f"Unable to handle date: {date}"
         # raise NotImplementedError(error)
 
-    return Summary(path, keywords.split("; "), digest, case_number, date.date())
+    return Summary(
+        document_path,
+        keywords.split("; "),
+        digest,
+        case_number,
+        date.date(),
+    )
 
 
 def extract_summaries(directory: pathlib.Path) -> None:
@@ -109,11 +135,24 @@ def extract_summaries(directory: pathlib.Path) -> None:
         # if pdf.name.endswith(('.a1.pdf', '.a2.pdf')):
         if pdf.name.endswith((".h1.pdf", ".h2.pdf")):
             # These PDFS do not have the summary. They have a different form.
-            # 
+            #
             # However, for 2021 there may be a text file with the summary.
-            continue
-        summary = extract_summary(pdf)
-        print(summary)
+            text_summary = pdf.with_suffix(".txt")
+            if text_summary.exists():
+                # This could check that the file size is less than a megabyte
+                # before loading it as a safe-guard.
+                with text_summary.open() as reader:
+                    lines = [
+                        # Filter out lines that were blank, or nearly empty.
+                        line.rstrip()
+                        for line in reader
+                        if not line.isspace()
+                    ]
+                summary = extract_summary(lines, pdf)
+                print(summary)
+        else:
+            summary = extract_summary_from_pdf(pdf)
+            print(summary)
 
 
 if __name__ == "__main__":
@@ -122,4 +161,6 @@ if __name__ == "__main__":
     extract_summaries(BASE_PATH / "2018")
     extract_summaries(BASE_PATH / "2019")
     extract_summaries(BASE_PATH / "2020")
-    extract_summaries(BASE_PATH / "2021")
+
+    # The 2021 data uses the text summaries which has a number of errors.
+    #    extract_summaries(BASE_PATH / "2021")
