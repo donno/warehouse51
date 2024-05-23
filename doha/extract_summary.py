@@ -5,6 +5,18 @@ digest (summary), case number and date.
 
 For example the 2020 claims from:
 https://doha.ogc.osd.mil/CLAIMS-DIVISION/DOHA-Claims-Appeals-Board-Decisions/2020-DOHA-Claims-Appeals-Board-Decisions/
+
+
+DOHA case numbers are the first two digits is the year that teh case was
+received by so 97-0001 was the first case in 1997 and 97-0002 was the second
+case. There are gaps in case numbers when there is not a written decision.
+
+The case suffixes are:
+- The h[number] are issued by Hearing Office
+- The a [number] were issued by the Appeal Board.
+The number indicates the number of the time they made a decision in the
+case.
+
 """
 
 from __future__ import annotations
@@ -30,6 +42,36 @@ class Summary:
     digest: str
     case_number: str
     date: datetime.date
+
+    @property
+    def describe_keywords(self) -> list[str]:
+        """Provide descriptive name instead of guidelines by a letter."""
+        return [convert_guidelines_letters(guideline) for guideline in self.keywords]
+
+
+def convert_guidelines_letters(guideline: str) -> str:
+    """Convert the guideline by letter to their  description.
+
+    The description comes from section E2.2.3 of DoDD 5220.6.
+
+    If the guideline is unknown it returns back the same thing.
+    """
+    guideline_letter_to_description = {
+        "Guideline A": "Allegiance to the United States",
+        "Guideline B": "Foreign influence",
+        "Guideline C": "Foreign preference",
+        "Guideline D": "Sexual behavior",
+        "Guideline E": "Personal conduct",
+        "Guideline F": "Financial considerations",
+        "Guideline G": "Alcohol consumption",
+        "Guideline H": "Drug involvement",
+        "Guideline I": "Emotional, mental, and personality disorders",
+        "Guideline J": "Criminal conduct",
+        "Guideline K": "Security violations",
+        "Guideline L": "Outside activities",
+        "Guideline M": "Misuse of Information Technology Systems",
+    }
+    return guideline_letter_to_description.get(guideline, guideline)
 
 
 def extract_summary_from_pdf(path: pathlib.Path) -> Summary:
@@ -180,11 +222,13 @@ def write_summaries_to_index(
 ):
     """Write out an index of the summaries to a file."""
     with index_path.open("w", encoding="utf-8") as writer:
-        writer.write(f"# DOHA Appeal Board Decisions - {subtitle}")
+        writer.write(f"# DOHA Appeal Board Decisions - {subtitle}\n")
 
         for summary in summaries:
             writer.write(f"## Case {summary.case_number}\n")
-            writer.write("**Keywords**: " + "; ".join(summary.keywords) + "\\\n")
+            writer.write(
+                "**Keywords**: " + "; ".join(summary.describe_keywords) + "\\\n"
+            )
             writer.write(f"**Date**: {summary.date.isoformat()}\n")
             writer.write("\n")
             writer.write(summary.digest)
