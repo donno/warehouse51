@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import itertools
+import logging
 import pathlib
 import subprocess
 
@@ -149,18 +150,75 @@ def extract_summaries(directory: pathlib.Path) -> None:
                         if not line.isspace()
                     ]
                 summary = extract_summary(lines, pdf)
-                print(summary)
+                yield summary
         else:
-            summary = extract_summary_from_pdf(pdf)
-            print(summary)
+            try:
+                summary = extract_summary_from_pdf(pdf)
+                yield summary
+            except ValueError:
+                logging.warning("Failed to summarise: %s", pdf, exc_info=True)
+
+
+def print_summaries(summaries):
+    """Print out each of the given summaries."""
+    for summary in summaries:
+        print(summary)
+
+
+def write_summaries_to_index(
+    summaries, subtitle: str, index_path: pathlib.Path, *, generate_links: bool = False
+):
+    """Write out an index of the summaries to a file."""
+    with index_path.open("w", encoding="utf-8") as writer:
+        writer.write(f"# DOHA Appeal Board Decisions - {subtitle}")
+
+        for summary in summaries:
+            writer.write(f"## Case {summary.case_number}\n")
+            writer.write("**Keywords**: " + "; ".join(summary.keywords) + "\\\n")
+            writer.write(f"**Date**: {summary.date.isoformat()}\n")
+            writer.write("\n")
+            writer.write(summary.digest)
+            if generate_links:
+                relative_path = summary.document.relative_to(index_path.parent)
+                writer.write(f"\n\n### [Read Report]({relative_path.as_posix()})\n")
+            writer.write("\n\n")
+    return index_path
+
+
+def write_index_for_year(base_path: pathlib.Path, year: int, output_path: pathlib.Path):
+    """Write out an index for the given year.
+
+    The assumption is the documents for the given year are found in
+    base_path / year.
+
+    The output path should be a directory to write the file and it will be
+    output_path / "doha_{year}.md".
+    """
+    generate_links = output_path.is_relative_to(base_path)
+    summaries = extract_summaries(base_path / str(year))
+    index_path = output_path / f"doha_{year}.md"
+    return write_summaries_to_index(
+        summaries,
+        subtitle=str(year),
+        index_path=index_path,
+        generate_links=generate_links,
+    )
 
 
 if __name__ == "__main__":
     BASE_PATH = pathlib.Path(r"D:\Downloads\Documents\DOHA_Appeal_Board_Decisions")
-    extract_summaries(BASE_PATH / "2017")
-    extract_summaries(BASE_PATH / "2018")
-    extract_summaries(BASE_PATH / "2019")
-    extract_summaries(BASE_PATH / "2020")
+    OUTPUT_PATH = pathlib.Path.cwd()
+    WRITE_TO_FILE = True
+
+    if WRITE_TO_FILE:
+        write_index_for_year(BASE_PATH, 2017, OUTPUT_PATH)
+        write_index_for_year(BASE_PATH, 2018, OUTPUT_PATH)
+        write_index_for_year(BASE_PATH, 2019, OUTPUT_PATH)
+        write_index_for_year(BASE_PATH, 2020, OUTPUT_PATH)
+    else:
+        print_summaries(extract_summaries(BASE_PATH / "2017"))
+        print_summaries(extract_summaries(BASE_PATH / "2018"))
+        print_summaries(extract_summaries(BASE_PATH / "2019"))
 
     # The 2021 data uses the text summaries which has a number of errors.
     #    extract_summaries(BASE_PATH / "2021")
