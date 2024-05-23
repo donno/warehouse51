@@ -105,20 +105,29 @@ def extract_summary(lines: list[str], document_path: pathlib.Path) -> Summary:
 
     date_prefix = "DATE: "
     date = next(
-        line[len(date_prefix) :].strip()
-        for line in lines
-        if line.upper().startswith(date_prefix)
+        (
+            line[len(date_prefix) :].strip()
+            for line in lines
+            if line.upper().startswith(date_prefix)
+        ),
+        None,
     )
 
-    if "/" in date:
-        if len(date) < 9:
-            date = datetime.datetime.strptime(date, "%M/%d/%y")
+    if date is None:
+        error = f"Failed to parse date for {document_path}"
+        raise ValueError(error)
+
+    try:
+        if "/" in date:
+            if len(date) < 9:
+                date = datetime.datetime.strptime(date, "%M/%d/%y")
+            else:
+                date = datetime.datetime.strptime(date, "%M/%d/%Y")
         else:
-            date = datetime.datetime.strptime(date, "%M/%d/%Y")
-    else:
-        date = datetime.datetime.strptime(date, "%B %d, %Y")
-        # error = f"Unable to handle date: {date}"
-        # raise NotImplementedError(error)
+            date = datetime.datetime.strptime(date, "%B %d, %Y")
+    except ValueError as orignal_error:
+        error = f"Failed to parse date for {document_path}: {orignal_error}"
+        raise ValueError(error) from None
 
     return Summary(
         document_path,
@@ -134,7 +143,7 @@ def extract_summaries(directory: pathlib.Path) -> None:
     pdfs = list(directory.glob("*.pdf"))
     for pdf in pdfs:
         # if pdf.name.endswith(('.a1.pdf', '.a2.pdf')):
-        if pdf.name.endswith((".h1.pdf", ".h2.pdf")):
+        if pdf.name.endswith((".h1.pdf", ".h2.pdf", ".h3.pdf")):
             # These PDFS do not have the summary. They have a different form.
             #
             # However, for 2021 there may be a text file with the summary.
@@ -149,6 +158,7 @@ def extract_summaries(directory: pathlib.Path) -> None:
                         for line in reader
                         if not line.isspace()
                     ]
+
                 summary = extract_summary(lines, pdf)
                 yield summary
         else:
@@ -219,6 +229,8 @@ if __name__ == "__main__":
         print_summaries(extract_summaries(BASE_PATH / "2017"))
         print_summaries(extract_summaries(BASE_PATH / "2018"))
         print_summaries(extract_summaries(BASE_PATH / "2019"))
-
-    # The 2021 data uses the text summaries which has a number of errors.
-    #    extract_summaries(BASE_PATH / "2021")
+        # The 2021 data uses the text summaries which has a number of errors.
+        #
+        # Of which I went through each of them and fixed them up. For dates
+        # cross checking them against the PDFs.
+        print_summaries(extract_summaries(BASE_PATH / "2021"))
