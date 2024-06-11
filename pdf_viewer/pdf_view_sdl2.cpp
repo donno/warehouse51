@@ -13,11 +13,15 @@
 
 ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index)
 {
-  FPDF_PAGE page = FPDF_LoadPage(document, page_index);
+  constexpr int targetDpi = 300;
+  constexpr int pointsPerInch = 72;
 
-  int width = FPDF_GetPageWidth(page);
-  int height = FPDF_GetPageHeight(page);
-  int alpha = FPDFPage_HasTransparency(page) ? 1 : 0;
+  ScopedFPDFPage page(FPDF_LoadPage(document, page_index));
+  const int width =
+    static_cast<int>(FPDF_GetPageWidth(page.get()) * targetDpi / pointsPerInch);
+  const int height =
+    static_cast<int>(FPDF_GetPageHeight(page.get()) * targetDpi / pointsPerInch);
+  const int alpha = FPDFPage_HasTransparency(page.get()) ? 1 : 0;
   ScopedFPDFBitmap bitmap(FPDFBitmap_Create(width, height, alpha));  // BGRx
 
   if (bitmap) {
@@ -26,13 +30,12 @@ ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index)
 
     int rotation = 0;
     int flags = FPDF_ANNOT;
-    FPDF_RenderPageBitmap(bitmap.get(), page, 0, 0, width, height,
+    FPDF_RenderPageBitmap(bitmap.get(), page.get(), 0, 0, width, height,
                           rotation, flags);
   } else {
     fprintf(stderr, "Page was too large to be rendered.\n");
     exit(EXIT_FAILURE);
   }
-  FPDF_ClosePage(page);
   return bitmap;
 }
 
