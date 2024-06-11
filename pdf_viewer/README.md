@@ -27,10 +27,16 @@ To build on Windows with Visual Studio
 
 Planned features
 ----------------
-* Fit page to window.
+* Fit page to window - first pass at this has been implemented.
 * Fit to width with scroll.
 * Stretch goal is to have a list of PDFs in a directory shown down the left so
   you can switch between it.
+* Stretch goal is to to have text selection and the ability to copy the text.
+  * `FPDFText_GetBoundedText()` - Extract unicode text within a rectangular
+    boundary on the page.
+  * `FPDFText_CountRects()` and `FPDFText_GetRect()` can be used to detect the
+  position of text so it can be highlighted.
+  * See https://stackoverflow.com/a/50616122
 
 TODO
 ----
@@ -42,6 +48,7 @@ Notes
   mind.
 - PDFium has an experimental API where it render the content of a page to a
   Skia SkCanvas instead of to a bitmap.
+- PDFium has `FPDF_RenderPage()` for Windows which takes a device context (DC).
 
 [0]: https://pdfium.googlesource.com/pdfium/
 [1]: https://www.libsdl.org

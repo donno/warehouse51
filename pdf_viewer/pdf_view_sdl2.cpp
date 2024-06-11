@@ -11,16 +11,18 @@
 
 #include <stdio.h>
 
-ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index)
+ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
+                        int screen_width, int screen_height)
 {
   constexpr int targetDpi = 300;
   constexpr int pointsPerInch = 72;
 
   ScopedFPDFPage page(FPDF_LoadPage(document, page_index));
-  const int width =
+  int width =
     static_cast<int>(FPDF_GetPageWidth(page.get()) * targetDpi / pointsPerInch);
-  const int height =
+  int height =
     static_cast<int>(FPDF_GetPageHeight(page.get()) * targetDpi / pointsPerInch);
+
   const int alpha = FPDFPage_HasTransparency(page.get()) ? 1 : 0;
   ScopedFPDFBitmap bitmap(FPDFBitmap_Create(width, height, alpha));  // BGRx
 
@@ -28,9 +30,29 @@ ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index)
     FPDF_DWORD fill_color = alpha ? 0x00000000 : 0xFFFFFFFF;
     FPDFBitmap_FillRect(bitmap.get(), 0, 0, width, height, fill_color);
 
+    // When doing a "fit to width" or "fit to height", the starting X or Y should
+    // be adjusted so it is in the centre of the screen.
+    // Another option is don't fit to screen size and instead let it overflow.
+    int x = 0;
+    int y = 0;
+    if (width / screen_height >= height / screen_height)
+    {
+      // Fit to width.
+      const auto new_height = height * screen_width / screen_height;
+      y = height = new_height / 2;
+      height = new_height;
+    }
+    else
+    {
+      // Fit to height.
+      const auto new_width = width * screen_height / screen_width;
+      x = width - new_width  - new_width / 2;
+      width = new_width;
+    }
+
     int rotation = 0;
     int flags = FPDF_ANNOT;
-    FPDF_RenderPageBitmap(bitmap.get(), page.get(), 0, 0, width, height,
+    FPDF_RenderPageBitmap(bitmap.get(), page.get(), x, y, width, height,
                           rotation, flags);
   } else {
     fprintf(stderr, "Page was too large to be rendered.\n");
@@ -65,8 +87,9 @@ int main() {
                                  1920, 1080,
                                  0);
 
-
-  auto bitmap = render(document.get(), 0);
+  // TODO: If fitting to width/height then draw the outline of the page to
+  // separate the page/document from the background of the application.
+  auto bitmap = render(document.get(), 0, 1920, 1080);
 
   SDL_Renderer* const renderer = SDL_CreateRenderer(window, -1, 0);
 
