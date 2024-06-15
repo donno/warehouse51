@@ -11,6 +11,45 @@
 
 #include <stdio.h>
 
+namespace
+{
+  namespace internal
+  {
+    // Adjust the sizing of the page to fit the entire page in the viewport.
+    //
+    // This will often mean if the window/viewport is not the large enough on
+    // screen most hte document will be too small.
+    //
+    // The starting X or Y is adjusted so it is in the centre of the screen.
+    void FitToPage(int screen_width, int screen_height,
+                  int* width, int* height,
+                  int* x, int* y);
+  }
+}
+
+void internal::FitToPage(
+  int screen_width, int screen_height,
+  int* width, int* height,
+  int* x, int* y)
+{
+  if (*width / screen_height >= *height / screen_height)
+  {
+    // Size the page based on the width, such that the full page fits in the
+    const auto new_height = *height * screen_width / screen_height;
+    *x = 0;
+    *y = *height - new_height / 2;
+    *height = new_height;
+  }
+  else
+  {
+    // Fit to height.
+    const auto new_width = *width * screen_height / screen_width;
+    *x = *width - new_width  - new_width / 2;
+    *y = 0;
+    *width = new_width;
+  }
+}
+
 ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
                         int screen_width, int screen_height)
 {
@@ -30,25 +69,16 @@ ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
     FPDF_DWORD fill_color = alpha ? 0x00000000 : 0xFFFFFFFF;
     FPDFBitmap_FillRect(bitmap.get(), 0, 0, width, height, fill_color);
 
-    // When doing a "fit to width" or "fit to height", the starting X or Y should
-    // be adjusted so it is in the centre of the screen.
-    // Another option is don't fit to screen size and instead let it overflow.
     int x = 0;
     int y = 0;
-    if (width / screen_height >= height / screen_height)
-    {
-      // Fit to width.
-      const auto new_height = height * screen_width / screen_height;
-      y = height = new_height / 2;
-      height = new_height;
-    }
-    else
-    {
-      // Fit to height.
-      const auto new_width = width * screen_height / screen_width;
-      x = width - new_width  - new_width / 2;
-      width = new_width;
-    }
+
+    // Consider if its possible instead having the bitmap only contain the page
+    // and so the centring for fit-to-page is performed when the resulting
+    // bitmap is written to screen.
+
+    // Another option is don't fit to screen size and instead let it overflow,
+    // so this would be the fit to width and then let the rest overhang.
+    internal::FitToPage(screen_width, screen_height, &width, &height, &x, &y);
 
     int rotation = 0;
     int flags = FPDF_ANNOT;
