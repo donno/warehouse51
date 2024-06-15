@@ -15,6 +15,12 @@ namespace
 {
   namespace internal
   {
+    enum class Sizing
+    {
+      FitToPage,
+      FitToWidth,
+    };
+
     // Adjust the sizing of the page to fit the entire page in the viewport.
     //
     // This will often mean if the window/viewport is not the large enough on
@@ -24,6 +30,12 @@ namespace
     void FitToPage(int screen_width, int screen_height,
                   int* width, int* height,
                   int* x, int* y);
+
+    // Adjust the sizing of the page to fit the the width of the page in the
+    // given screen width, such that the page will be shown from the left most
+    // of the window to the right most.
+    void FitToWidth(int screen_width, int screen_height,
+                    int* width, int* height);
   }
 }
 
@@ -50,10 +62,27 @@ void internal::FitToPage(
   }
 }
 
-ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
-                        int screen_width, int screen_height)
+void internal::FitToWidth(
+  int screen_width, int screen_height,
+  int* width, int* height)
 {
-  constexpr int targetDpi = 300;
+  if (screen_width > *width)
+  {
+    *width = screen_width;
+    //*height = //
+    puts("Not yet implemented.");
+  }
+  else
+  {
+    // This should be the default...
+  }
+}
+
+ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
+                        int screen_width, int screen_height,
+                        internal::Sizing sizing)
+{
+  constexpr int targetDpi = 600;
   constexpr int pointsPerInch = 72;
 
   ScopedFPDFPage page(FPDF_LoadPage(document, page_index));
@@ -72,16 +101,22 @@ ScopedFPDFBitmap render(FPDF_DOCUMENT document, int page_index,
     int x = 0;
     int y = 0;
 
-    // Consider if its possible instead having the bitmap only contain the page
-    // and so the centring for fit-to-page is performed when the resulting
-    // bitmap is written to screen.
-
-    // Another option is don't fit to screen size and instead let it overflow,
-    // so this would be the fit to width and then let the rest overhang.
-    internal::FitToPage(screen_width, screen_height, &width, &height, &x, &y);
+    switch (sizing)
+    {
+    case internal::Sizing::FitToPage:
+      // Consider if its possible instead having the bitmap only contain the page
+      // and so the centring for fit-to-page is performed when the resulting
+      // bitmap is written to screen.
+      internal::FitToPage(screen_width, screen_height,
+                          &width, &height, &x, &y);
+      break;
+    case internal::Sizing::FitToWidth:
+      //internal::FitToWidth(screen_width, screen_height, &width, &height);
+      break;
+    }
 
     int rotation = 0;
-    int flags = FPDF_ANNOT;
+    int flags = FPDF_ANNOT | FPDF_LCD_TEXT;
     FPDF_RenderPageBitmap(bitmap.get(), page.get(), x, y, width, height,
                           rotation, flags);
   } else {
@@ -117,17 +152,21 @@ int main() {
                                  1920, 1080,
                                  0);
 
+  const auto sizing = internal::Sizing::FitToWidth;
   // TODO: If fitting to width/height then draw the outline of the page to
   // separate the page/document from the background of the application.
-  auto bitmap = render(document.get(), 0, 1920, 1080);
+  auto bitmap = render(document.get(), 0, 1920, 1080, sizing);
 
   SDL_Renderer* const renderer = SDL_CreateRenderer(window, -1, 0);
+
+  const auto rendered_page_width = FPDFBitmap_GetWidth(bitmap.get());
+  const auto rendered_page_height = FPDFBitmap_GetHeight(bitmap.get());
 
   // FPDFBitmap_GetFormat() will tell us if its BGR, BGRx or BGx;
   auto screen = SDL_CreateRGBSurfaceWithFormatFrom(
       FPDFBitmap_GetBuffer(bitmap.get()),
-      FPDFBitmap_GetWidth(bitmap.get()),
-      FPDFBitmap_GetHeight(bitmap.get()),
+      rendered_page_width,
+      rendered_page_height,
       32,
       FPDFBitmap_GetStride(bitmap.get()),
       SDL_PIXELFORMAT_BGR888);
@@ -142,9 +181,35 @@ int main() {
       goto POST_SCREEN_CLEANUP;
   }
 
+  // If fitting the width of hte page in the width of the viewport, then
+  // this should not render teh entire image.
   SDL_UpdateTexture(texture, nullptr, screen->pixels, screen->pitch);
   SDL_RenderClear(renderer);
-  SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+
+  switch (sizing)
+  {
+    case internal::Sizing::FitToPage:
+    {
+      // The enter image should be shown.
+      SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+      break;
+    }
+    case internal::Sizing::FitToWidth:
+    {
+      // Only part of the image should be shown.
+      // TODO: Allow the user to scroll down.
+      int window_width;
+      int window_height;
+      SDL_GetWindowSize(window, &window_width, &window_height);
+      const auto screen_aspect_ratio =
+        window_height / static_cast<double>(window_width);
+
+      SDL_Rect source = {0, 0, rendered_page_width, static_cast<int>(rendered_page_width * screen_aspect_ratio) };
+      SDL_RenderCopy(renderer, texture, &source, nullptr);
+      break;
+    }
+  }
+
   SDL_RenderPresent(renderer);
 
   SDL_Event event;
