@@ -2,6 +2,7 @@
 to return representations of the system and thus visit the gates rather than
 only evaluate them."""
 
+import io
 import unittest
 
 __TODO__ = """
@@ -532,7 +533,14 @@ class Visitor:
                 # Binary gate only has one output so the destination is 0.
                 self.accept_connection(gate.a, gate, 0, 0)
                 self.accept_connection(gate.b, gate, 1, 0)
-
+        elif isinstance(gate_or_input, NotGate):
+            # This could be generalised to be an unary gate (1 input with
+            # 1 output.).
+            gate = gate_or_input
+            self.accept_gate(gate, name)
+            self.accept(gate.a)
+            if self.handle_connections:
+                self.accept_connection(gate.a, gate, 0, 0)
         elif isinstance(gate_or_input, Input):
             self.accept_input(gate_or_input)
         elif isinstance(gate_or_input, Output):
@@ -989,6 +997,23 @@ class ComponentTests(unittest.TestCase):
 
         value = Adder8BitUniversal.bool_array_to_integer(reversed(values))
         self.assertEqual(value, 251)
+
+
+class GraphTests(unittest.TestCase):
+    """Tests the components can be graphed.
+
+    This does not check the exact dot output, merely if no exception is raised.
+    """
+
+    def test_full_adder_or_and_not_graph(self):
+        """Test the full adder using only ors and nots"""
+        with io.StringIO() as writer:
+            graph(FullAdderNorOnly(), writer)
+
+    def test_full_adder_or_and_not_graph(self):
+        """Test the full adder using only ors and nots"""
+        with io.StringIO() as writer:
+            graph(FullAdderOrAndNotOnly(), writer)
 
 
 if __name__ == '__main__':
