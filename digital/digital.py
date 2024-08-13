@@ -126,6 +126,40 @@ class Output:
         return self.name
 
 
+class NotGate:
+    """Inverts the given input a.k.a computes !a from a."""
+    def __init__(self, a):
+        self.a = a
+        self.output = None
+        self.callbacks = []
+
+        # Register ourself with the input so we are called when the input is
+        # provided.
+        self.a.register_with(self)
+
+    def register_with(self, dependant):
+        """Register with this gate to inform dependant when the output is set.
+
+        It is expected that dependant has an eval() function.
+        """
+        self.callbacks.append(dependant)
+
+    def eval(self):
+        if self.a.output is not None:
+            self.output = self(self.a.output)
+            for callback in self.callbacks:
+                callback.eval()
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({self.a!r})'
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}({self.a})'
+
+    def __call__(self, a):
+        return not a
+
+
 class BinaryGate:
     """Binary gate takes two inputs and produces one output."""
 
@@ -562,6 +596,32 @@ def graph(component, writer):
     OutputEdges().accept(component)
 
     writer.write('}')
+
+
+class NotGateTests(unittest.TestCase):
+    """Tests the functionality of the Not class."""
+
+    def test_call(self):
+        """Test the call operator on the NotGate class"""
+        gate = NotGate(Input("a"))
+        self.assertEqual(gate(True), False)
+        self.assertEqual(gate(False), True)
+
+    def test_nor_populate_input_false(self):
+        """Test not gate by setting input to False."""
+        a = Input('a')
+        gate = NotGate(a)
+
+        a.set(False)
+        self.assertEqual(gate.output, True)
+
+    def test_nor_populate_input_false(self):
+        """Test not gate by setting input to True."""
+        a = Input('a')
+        gate = NotGate(a)
+
+        a.set(True)
+        self.assertEqual(gate.output, False)
 
 
 class NorGateTests(unittest.TestCase):
