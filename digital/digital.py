@@ -306,6 +306,51 @@ class FullAdderNorOnly:
         }
 
 
+class FullAdderOrAndNotOnly:
+    """A full adder using only or and not.
+
+    This is a deconstruction of a NOR gate."""
+
+    def __init__(self, a=None, b=None, carry_in=None):
+        # Inputs
+        self.a = a or Input('a')
+        self.b = b or Input('b')
+        self.carry_in = carry_in or Input('carry_in')
+
+        # In between.
+        c_inverted = OrGate(self.a, self.b)
+        c = NotGate(c_inverted)
+
+        f_inverted = OrGate(NotGate(OrGate(self.a, c)),
+                            NotGate(OrGate(c, self.b)))
+        f = NotGate(f_inverted)
+        g_inverted = OrGate(self.carry_in, f)
+        g = NotGate(g_inverted)
+
+        # Outputs
+        carry_out_inverted = OrGate(c, g)
+        self.carry_out = NotGate(carry_out_inverted)
+        sum_inverted = OrGate(NotGate(OrGate(f, g)),
+                              NotGate(OrGate(g, self.carry_in)))
+        self.sum = NotGate(sum_inverted)
+
+    def __call__(self, a, b, carry_in):
+        """Return (sum, carry_out)"""
+        self.a.set(a)
+        self.b.set(b)
+        self.carry_in.set(carry_in)
+
+        return self.sum.output, self.carry_out.output
+
+    @property
+    def outputs(self) -> dict:
+        """The outputs of this component."""
+        return {
+            'sum': self.sum,
+            'carry_out': self.carry_out,
+        }
+
+
 class AdderNBit:
     """An N-bit adder using only NOR (a universal logic gate)."""
 
@@ -870,6 +915,16 @@ class ComponentTests(unittest.TestCase):
             expected_sum, carry_out = outputs
             with self.subTest(a=inputs[0], b=inputs[1], carry_in=inputs[2]):
                 full_adder = FullAdderNorOnly()
+                actual_sum, actual_carry_out = full_adder(*inputs)
+                self.assertEqual(actual_sum, bool(expected_sum))
+                self.assertEqual(actual_carry_out, bool(carry_out))
+
+    def test_full_adder_or_and_not(self):
+        """Test the full adder using only ors and nots"""
+        for inputs, outputs in self.FULL_ADDER_TRUTH_TABLE:
+            expected_sum, carry_out = outputs
+            with self.subTest(a=inputs[0], b=inputs[1], carry_in=inputs[2]):
+                full_adder = FullAdderOrAndNotOnly()
                 actual_sum, actual_carry_out = full_adder(*inputs)
                 self.assertEqual(actual_sum, bool(expected_sum))
                 self.assertEqual(actual_carry_out, bool(carry_out))
