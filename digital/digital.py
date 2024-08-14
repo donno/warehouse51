@@ -475,10 +475,19 @@ class IntegerToBinary:
     # logic, as it really needs a higher level thing to recognise this should
     # be set and then propagate along.
 
-    def __init__(self, name, bit_length=8):
+    def __init__(self, name, *, bit_length=8, input: Input | None = None):
+        self.input = input or Input('integer')
         self.bit_length = bit_length
         self._outputs = [Output(f'{name}{i}', self, i)
                          for i in range(self.bit_length)]
+
+        # Register ourself with the input so we are called when the input is
+        # provided.
+        self.input.register_with(self)
+
+    @property
+    def inputs(self):
+        return [self.input]
 
     @property
     def outputs(self):
@@ -490,6 +499,10 @@ class IntegerToBinary:
         values = reversed(self.integer_to_bool_array(value, self.bit_length))
         for output, value in zip(self._outputs, values):
             output.set(value)
+
+    def eval(self):
+        if self.input.output is not None:
+            self.set(self.input.output)
 
     @staticmethod
     def integer_to_bool_array(integer, bit_length=8):
@@ -559,17 +572,31 @@ class Visitor:
                     self.accept(gate, name)
             self.leave_component(component, name)
 
-            sources = getattr(gate_or_input, 'inputs', None)
-            if self.handle_connections and sources:
-                # The key of the sources is a name of the inputs.
-                # The value of the sources is the 'gate'/'component'.
+            sources = getattr(gate_or_input, 'inputs', [])
+            # Handle sources being a dictionary or a sequence.
+            #
+            # The key of the sources is a name of the inputs.
+            # The value of the sources is the 'gate'/'component'.
+            if isinstance(sources, dict):
+                for source_name, source in sources.items():
+                    self.accept(source, source_name)
 
-                # Handle sources being a dictionary or a sequence.
-                if isinstance(sources, dict):
-                    sources = sources.values()
+                    if self.handle_connections:
+                        if isinstance(source, Output):
+                            # This doesn't seem to be handled, see below.
+                            raise NotImplementedError()
 
-                for i, source in enumerate(sources):
-                    self.accept_connection(source, component, i, 0)
+                        # There may be a problem here where the source of the
+                        # component should be an Output rather than being
+                        # directly connected  directly connected ot a gate.
+                        self.accept_connection(source,
+                                               component,
+                                               0,
+                                               0)
+            else:
+                for source in sources:
+                    self.accept(source, name)
+
         else:
             # The idea here is to provide a 'Gate' abstraction so there is
             # a generic inputs and outputs property for gates, like wise
@@ -891,6 +918,54 @@ class AndGateTests(unittest.TestCase):
         """Test and gate's string representation."""
         gate = AndGate(Input('a'), Input('b'))
         self.assertEqual(repr(gate), "AndGate(Input('a'), Input('b'))")
+
+
+class IntegerToBinaryTests(unittest.TestCase):
+    """Tests for the IntegerToBinary class."""
+
+    def test_zero(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(0)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [False, False, False, False])
+
+    def test_one(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(1)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [True, False, False, False])
+
+    def test_two(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(2)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [False, True, False, False])
+
+    def test_three(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(3)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [True, True, False, False])
+
+    def test_five(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(5)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [True, False, True, False])
+
+    def test_nine(self):
+        a = IntegerToBinary('a', bit_length=4)
+        a.set(9)
+        bits = [output.output for output in a.outputs.values()]
+        self.assertSequenceEqual(bits, [True, False, False, True])
+
+    def test_via_input(self):
+        """Test supply the integer to IntegerToBinary via a input."""
+        a = Input('a')
+        b = IntegerToBinary('a', bit_length=4, input=a)
+        a.set(5)
+        bits = [output.output for output in b.outputs.values()]
+        self.assertSequenceEqual(bits, [True, False, True, False])
 
 
 class ComponentTests(unittest.TestCase):
