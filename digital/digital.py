@@ -594,9 +594,15 @@ class Visitor:
                                                0,
                                                0)
             else:
-                for source in sources:
+                for destination_index, source in enumerate(sources):
                     self.accept(source, name)
-
+                    if self.handle_connections:
+                        self.accept_connection(
+                            source.component,
+                            component,
+                            destination_index,
+                            source.output_index,
+                        )
         else:
             # The idea here is to provide a 'Gate' abstraction so there is
             # a generic inputs and outputs property for gates, like wise
