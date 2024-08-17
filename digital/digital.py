@@ -309,33 +309,32 @@ class BcdTo7SegmentDecoder:
         self.c = c or Input('C')
         self.d = d or Input('D')
 
-        # This version simply takes the expressions above as-is. It does not
-        #
-        # It does not reuse the results, for example if b_inverted was
-        # produced (NotGate(self.b)) then this would work fine.
+        not_b = NotGate(self.b)
+        not_c = NotGate(self.c)
+        not_d = NotGate(self.d)
 
         self.output_a = OrGate(
             OrGate(self.a, self.c),
             OrGate(AndGate(self.b, self.d),
-                   AndGate(NotGate(self.b), NotGate(self.d))),
+                   AndGate(not_b, not_d)),
         )
 
         self.output_b = OrGate(
-            OrGate(NotGate(self.b),
+            OrGate(not_b,
                    AndGate(self.c, self.d)),
-            AndGate(NotGate(self.c), NotGate(self.d)),
+            AndGate(not_c, not_d),
         )
 
         self.output_c = OrGate(
             OrGate(self.b, self.d),
-            NotGate(self.c),
+            not_c,
         )
 
-        d1 = AndGate(NotGate(self.b), NotGate(self.d))
-        d2 = AndGate(self.c, NotGate(self.d))
+        d1 = AndGate(not_b, not_d)
+        d2 = AndGate(self.c, not_d)
         d3 = AndGate(AndGate(self.b, self.d),
-                     NotGate(self.c))
-        d4 = AndGate(NotGate(self.b), self.c)
+                     not_c)
+        d4 = AndGate(not_b, self.c)
         d5 = self.a
 
         self.output_d = OrGate(
@@ -344,24 +343,24 @@ class BcdTo7SegmentDecoder:
 
         # e = B'D' + CD'
         self.output_e = OrGate(
-            AndGate(NotGate(self.b), NotGate(self.d)),
-            AndGate(self.c, NotGate(self.d)),
+            AndGate(not_b, not_d),
+            AndGate(self.c, not_d),
         )
 
         # f = A + C'D' + BC' + BD'
         f1 = OrGate(self.a,
-                    AndGate(NotGate(self.c), NotGate(self.d)))
+                    AndGate(not_c, not_d))
         f2 = OrGate(
-            AndGate(self.b, NotGate(self.c)),
-            AndGate(self.b, NotGate(self.d)),
+            AndGate(self.b, not_c),
+            AndGate(self.b, not_d),
         )
         self.output_f = OrGate(f1, f2)
 
         # g = A + BC' + B'C + CD'
         g1 = OrGate(self.a,
-                    AndGate(self.b, NotGate(self.c)))
-        g2 = OrGate(AndGate(self.c, NotGate(self.b)),
-                    AndGate(self.c, NotGate(self.d)))
+                    AndGate(self.b, not_c))
+        g2 = OrGate(AndGate(self.c, not_b),
+                    AndGate(self.c, not_d))
         self.output_g = OrGate(g1, g2)
 
     def __call__(self, a, b, c, d):
