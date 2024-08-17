@@ -313,10 +313,15 @@ class BcdTo7SegmentDecoder:
         not_c = NotGate(self.c)
         not_d = NotGate(self.d)
 
+        c_not_d = AndGate(self.c, not_d)
+        not_b_c = AndGate(not_b, self.c)
+        b_not_c = AndGate(self.b, not_c)
+        not_b_not_d = AndGate(not_b, not_d)
+
         self.output_a = OrGate(
             OrGate(self.a, self.c),
             OrGate(AndGate(self.b, self.d),
-                   AndGate(not_b, not_d)),
+                   not_b_not_d),
         )
 
         self.output_b = OrGate(
@@ -330,38 +335,28 @@ class BcdTo7SegmentDecoder:
             not_c,
         )
 
-        d1 = AndGate(not_b, not_d)
-        d2 = AndGate(self.c, not_d)
-        d3 = AndGate(AndGate(self.b, self.d),
-                     not_c)
-        d4 = AndGate(not_b, self.c)
-        d5 = self.a
-
         self.output_d = OrGate(
-            OrGate(OrGate(d1, d2), OrGate(d4, d5)),
-            d3)
+            OrGate(OrGate(not_b_not_d, c_not_d),
+                   OrGate(not_b_c, self.a)),
+            AndGate(b_not_c, self.d))
 
         # e = B'D' + CD'
         self.output_e = OrGate(
             AndGate(not_b, not_d),
-            AndGate(self.c, not_d),
+            c_not_d,
         )
 
         # f = A + C'D' + BC' + BD'
-        f1 = OrGate(self.a,
-                    AndGate(not_c, not_d))
-        f2 = OrGate(
-            AndGate(self.b, not_c),
-            AndGate(self.b, not_d),
+        self.output_f = OrGate(
+            OrGate(self.a, AndGate(not_c, not_d)),
+            OrGate(b_not_c, AndGate(self.b, not_d)),
         )
-        self.output_f = OrGate(f1, f2)
 
         # g = A + BC' + B'C + CD'
-        g1 = OrGate(self.a,
-                    AndGate(self.b, not_c))
-        g2 = OrGate(AndGate(self.c, not_b),
-                    AndGate(self.c, not_d))
-        self.output_g = OrGate(g1, g2)
+        self.output_g = OrGate(
+            OrGate(self.a, b_not_c),
+            OrGate(not_b_c, c_not_d),
+        )
 
     def __call__(self, a, b, c, d):
         """Returns which of the 7 segments should be on."""
