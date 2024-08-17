@@ -3,6 +3,7 @@ to return representations of the system and thus visit the gates rather than
 only evaluate them."""
 
 import io
+import itertools
 import unittest
 
 __TODO__ = """
@@ -17,6 +18,25 @@ __TODO__ = """
   would like.
 """
 
+__NOTES__ = """
+Reminders for syntax.
+
+Assume inputs a and b.
+
+* NOT is a'
+* Buffer is a
+* AND is "ab"
+* OR is "a + b"
+* NAND is "(ab)'"
+* NOR is "(a + b)'"
+* XOR is "a(+)b"
+* XOR is "a(o)b"
+
+Therefore
+  F = ab + cd
+Is:
+  F = OR(AND(a, b), AND(c, d))
+"""
 
 class Input:
     """Represents the input of a gate, it has an output which is populated
@@ -127,8 +147,14 @@ class Output:
         return self.name
 
 
-class NotGate:
-    """Inverts the given input a.k.a computes !a from a."""
+
+class Buffer:
+    """A buffer a.k.k non-inverting buffer doesn't change the input.
+
+    Another name is a "Driver".
+
+    Given the input a it returns a.
+    """
     def __init__(self, a):
         self.a = a
         self.output = None
@@ -137,6 +163,15 @@ class NotGate:
         # Register ourself with the input so we are called when the input is
         # provided.
         self.a.register_with(self)
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({self.a!r})'
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}({self.a})'
+
+    def __call__(self, a):
+        return a
 
     def register_with(self, dependant):
         """Register with this gate to inform dependant when the output is set.
@@ -157,6 +192,12 @@ class NotGate:
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({self.a})'
 
+
+class NotGate(Buffer):
+    """Inverts the given input a.k.a computes !a from a.
+
+    Also known as an inverting buffer.
+    """
     def __call__(self, a):
         return not a
 
@@ -209,6 +250,18 @@ class AndGate(BinaryGate):
 
     def __call__(self, a, b):
         return bool(a and b)
+
+
+class NandGate(BinaryGate):
+    """NAND gate has two inputs and one output.
+
+    It returns false if both values are equal.
+
+    It is equivalent to a inverted-NOR gate.
+    """
+
+    def __call__(self, a, b):
+        return bool(not (a and b))
 
 
 class OrGate(BinaryGate):
@@ -684,6 +737,32 @@ def graph(component, writer):
     writer.write('}')
 
 
+class BufferTests(unittest.TestCase):
+    """Tests the functionality of the Buffer class."""
+
+    def test_call(self):
+        """Test the call operator on the Buffer class"""
+        gate = Buffer(Input("a"))
+        self.assertEqual(gate(True), True)
+        self.assertEqual(gate(False), False)
+
+    def test_nor_populate_input_false(self):
+        """Test not gate by setting input to False."""
+        a = Input('a')
+        gate = Buffer(a)
+
+        a.set(False)
+        self.assertEqual(gate.output, False)
+
+    def test_nor_populate_input_false(self):
+        """Test not gate by setting input to True."""
+        a = Input('a')
+        gate = Buffer(a)
+
+        a.set(True)
+        self.assertEqual(gate.output, True)
+
+
 class NotGateTests(unittest.TestCase):
     """Tests the functionality of the Not class."""
 
@@ -924,6 +1003,58 @@ class AndGateTests(unittest.TestCase):
         """Test and gate's string representation."""
         gate = AndGate(Input('a'), Input('b'))
         self.assertEqual(repr(gate), "AndGate(Input('a'), Input('b'))")
+
+
+class NandGateTests(unittest.TestCase):
+    """Tests the functionality of the NandGate class."""
+
+    def test_and_populate_input_00(self):
+        """Test and gate going by setting inputs (False, False)."""
+        a = Input('a')
+        b = Input('b')
+        gate = NandGate(a, b)
+
+        a.set(False)
+        b.set(False)
+        self.assertEqual(gate.output, True)
+
+    def test_and_populate_input_01(self):
+        """Test and gate going by setting inputs (False, True)."""
+        a = Input('a')
+        b = Input('b')
+        gate = NandGate(a, b)
+
+        a.set(False)
+        b.set(True)
+        self.assertEqual(gate.output, True)
+
+    def test_and_populate_input_10(self):
+        """Test and gate going by setting inputs (True, False)."""
+        a = Input('a')
+        b = Input('b')
+        gate = NandGate(a, b)
+        a.set(True)
+        b.set(False)
+        self.assertEqual(gate.output, True)
+
+    def test_and_populate_input_11(self):
+        """Test and gate going by setting inputs (True, True)."""
+        a = Input('a')
+        b = Input('b')
+        gate = NandGate(a, b)
+        a.set(True)
+        b.set(True)
+        self.assertEqual(gate.output, False)
+
+    def test_and_str(self):
+        """Test and gate's string representation."""
+        gate = NandGate(Input('a'), Input('b'))
+        self.assertEqual(str(gate), "NandGate(a, b)")
+
+    def test_and_repr(self):
+        """Test and gate's string representation."""
+        gate = NandGate(Input('a'), Input('b'))
+        self.assertEqual(repr(gate), "NandGate(Input('a'), Input('b'))")
 
 
 class IntegerToBinaryTests(unittest.TestCase):
