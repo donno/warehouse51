@@ -284,6 +284,116 @@ class XorGate(BinaryGate):
         return bool(a ^ b)
 
 
+class BcdTo7SegmentDecoder:
+    """BCD (Binary Coded Decimal) to 7-Segment Decoder.
+
+    This represents the idea of Texas Instruments SN74LS47 without the
+    additional features / control logic for the lamp test, blanking input and
+    ripple-blanking input.
+
+    Given inputs as A, B, C, D and outputs a to g, the expressions that
+    represent them are:
+
+    a = A + C + BD + B'D'
+    b = B'+ C'D' + CD
+    c = B + C' + D
+    d = B'D' + CD' + BC'D + B'C + A
+    e = B'D' + CD'
+    f = A + C'D' + BC' + BD'
+    g = A + BC' + B'C + CD'
+    """
+
+    def __init__(self, a=None, b=None, c=None, d=None):
+        self.a = a or Input('A')
+        self.b = b or Input('B')
+        self.c = c or Input('C')
+        self.d = d or Input('D')
+
+        # This version simply takes the expressions above as-is. It does not
+        #
+        # It does not reuse the results, for example if b_inverted was
+        # produced (NotGate(self.b)) then this would work fine.
+
+        self.output_a = OrGate(
+            OrGate(self.a, self.c),
+            OrGate(AndGate(self.b, self.d),
+                   AndGate(NotGate(self.b), NotGate(self.d))),
+        )
+
+        self.output_b = OrGate(
+            OrGate(NotGate(self.b),
+                   AndGate(self.c, self.d)),
+            AndGate(NotGate(self.c), NotGate(self.d)),
+        )
+
+        self.output_c = OrGate(
+            OrGate(self.b, self.d),
+            NotGate(self.c),
+        )
+
+        d1 = AndGate(NotGate(self.b), NotGate(self.d))
+        d2 = AndGate(self.c, NotGate(self.d))
+        d3 = AndGate(AndGate(self.b, self.d),
+                     NotGate(self.c))
+        d4 = AndGate(NotGate(self.b), self.c)
+        d5 = self.a
+
+        self.output_d = OrGate(
+            OrGate(OrGate(d1, d2), OrGate(d4, d5)),
+            d3)
+
+        # e = B'D' + CD'
+        self.output_e = OrGate(
+            AndGate(NotGate(self.b), NotGate(self.d)),
+            AndGate(self.c, NotGate(self.d)),
+        )
+
+        # f = A + C'D' + BC' + BD'
+        f1 = OrGate(self.a,
+                    AndGate(NotGate(self.c), NotGate(self.d)))
+        f2 = OrGate(
+            AndGate(self.b, NotGate(self.c)),
+            AndGate(self.b, NotGate(self.d)),
+        )
+        self.output_f = OrGate(f1, f2)
+
+        # g = A + BC' + B'C + CD'
+        g1 = OrGate(self.a,
+                    AndGate(self.b, NotGate(self.c)))
+        g2 = OrGate(AndGate(self.c, NotGate(self.b)),
+                    AndGate(self.c, NotGate(self.d)))
+        self.output_g = OrGate(g1, g2)
+
+    def __call__(self, a, b, c, d):
+        """Returns which of the 7 segments should be on."""
+        self.a.set(a)
+        self.b.set(b)
+        self.c.set(c)
+        self.d.set(d)
+        return [
+            self.output_a.output,
+            self.output_b.output,
+            self.output_c.output,
+            self.output_d.output,
+            self.output_e.output,
+            self.output_f.output,
+            self.output_g.output,
+        ]
+
+    @property
+    def outputs(self) -> dict:
+        """The outputs of this component."""
+        return {
+            'a': self.output_a,
+            'b': self.output_b,
+            'c': self.output_c,
+            'd': self.output_d,
+            'e': self.output_e,
+            'f': self.output_f,
+            'g': self.output_g,
+        }
+
+
 class FullAdder:
     """Represents the digital electronic component known as a full adder.
 
@@ -1209,6 +1319,33 @@ class ComponentTests(unittest.TestCase):
 
         value = Adder8BitUniversal.bool_array_to_integer(reversed(values))
         self.assertEqual(value, 251)
+
+
+class BcdTo7SegmentDecoderTests(unittest.TestCase):
+    """Test the BcdTo7SegmentDecoder component."""
+
+    def test_all_inputs(self):
+        # The inputs are:
+        inputs = list(itertools.product([False, True], repeat=4))
+
+        outputs = [
+            [True, True, True, True, True, True, False], # 0
+            [False, True, True, False, False, False, False], # 1
+            [True, True, False, True, True, False, True], # 2
+            [True, True, True, True, False, False, True], # 3
+            [False, True, True, False, False, True, True], # 4
+            [True, False, True, True, False, True, True], # 5
+            [True, False, True, True, True, True, True], # 6
+            [True, True, True, False, False, False, False], # 7
+            [True, True, True, True, True, True, True], # 8
+            [True, True, True, True, False, True, True], # 9
+        ]
+
+        for input, expected_output in zip(inputs, outputs):
+            with self.subTest(input=input):
+                bcd = BcdTo7SegmentDecoder()
+                output = bcd(*input)
+                self.assertSequenceEqual(output, expected_output)
 
 
 class GraphTests(unittest.TestCase):
