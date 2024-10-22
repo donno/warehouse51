@@ -315,8 +315,12 @@ class DevelopmentTileVisitor(TileVisitor):
             # TODO: Consider if process_tile() should be handling this.
             if value.HasField('string_value'):
                 print('  ', k, ':', value.string_value)
+            elif value.HasField('int_value'):
+                print('  ', k, ':', value.int_value)
+            elif value.HasField('double_value'):
+                print('  ', k, ':', value.int_value)
             else:
-                print('  ', k, ':', v)
+                print('  ', k, ':', value)
 
         print('  Geometry')
         print('  ', list(geometry))
