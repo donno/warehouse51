@@ -230,6 +230,50 @@ def read_surface(reader):
     return groups
 
 
+def read_stratigraphic_grid(reader):
+    """Read a stratigraphic grid (SGrid)."""
+
+    def read_axis(line: str):
+        keyword, row_count, column_count, slice_count = line.strip().split(" ")
+        assert keyword == "AXIS_N"
+        return row_count, column_count, slice_count
+
+    def read_property(sub_reader):
+        # Read (key, value) until no more.
+        for line in sub_reader:
+            if line.startswith("PROPERTY "):
+                # Start of a new property
+                # TODO: Handle this.
+                pass
+            elif line.startswith("PROP"):
+                pass
+
+    groups = []
+    for line in reader:
+        if line.startswith("AXIS_N"):
+            axis = read_axis(line)
+            print(axis)
+        elif line.startswith("PROP_ALIGNMENT"):
+            alignment = line.partition(" ")[-1].strip()
+            print(alignment)
+        elif line.startswith("ASCII_DATA_FILE"):
+            additional_file = line.partition(" ")[-1].strip()
+        elif line.startswith("PROPERTY"):
+            read_property(reader)
+
+    # The data file is of the form:
+    # - x y z p1 p2 p3... flag u v w
+    # Where p1 to p3 are proeprtie values for hte node.
+    # flag speciifed connectivity and u, v, w are the index of
+    # the node (a.k.a i, j, k).
+    return {
+        "axis": axis,
+        "alignment": alignment,
+        "properties": [], # TODO: Read the properties.
+        "additional_file": additional_file,
+    }
+    return groups
+
 def read_grid_3d(reader):
 
     origin = []  # This is the front-bottom-left corner of the grid.
