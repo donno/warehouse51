@@ -1,0 +1,88 @@
+# Building
+# $ podman build -f Containerfile.wine10 --tag ubuntu:24.04-wine10 --target wine_console
+# $ podman build -f Containerfile.wine10 --tag ubuntu:24.04-wine10-ui --target wine_ui
+#
+# Running
+# $ podman run --rm -it localhost/ubuntu:24.04-wine10
+# $ podman run -p 25900:5900 --rm -it localhost/ubuntu:24.04-wine10-ui
+FROM ubuntu:24.04 AS wine_console
+ARG WINE_BRANCH="staging"
+RUN apt-get update \
+    && (DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gnupg \
+        wget) \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wine
+#
+# - Download and install the key for the apt source
+# - Add the apt-source
+#   This could use software-properties-common for add-apt-repository but that
+#   is written in Python and brings in a lot of extra depends granted
+#   installing wine seems to bring in those packages anyway.
+# - Enable i386
+# - Update the package index
+# - Install Wine.
+# - Download winetricks
+#
+# This requires: wget and gnupg
+#
+# TODO:
+# - Investigate the following warning:
+#   Key is stored in legacy trusted.gpg keyring (/etc/apt/trusted.gpg), see the DEPRECATION section in apt-key(8)
+RUN wget --no-verbose -O- https://dl.winehq.org/wine-builds/winehq.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 apt-key add - \
+    && ( . /etc/os-release; echo "deb https://dl.winehq.org/wine-builds/ubuntu/ $VERSION_CODENAME main" >> /etc/apt/sources.list ) \
+    && dpkg --add-architecture i386 \
+    && apt-get update \
+    && (DEBIAN_FRONTEND="noninteractive" apt-get install -y --install-recommends winehq-${WINE_BRANCH}) \
+    && rm -rf /var/lib/apt/lists/* \
+    && wget --no-verbose --output-document=$HOME/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks
+
+# Other notes:
+# - Failed to resolve user 'systemd-network'
+# - error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+# - 0114:err:winebth:bluez_dbus_init Failed to get system dbus connection: "org.freedesktop.DBus.Error.FileNotFound": "Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory"
+# - Installing both amd64 and i386 results in about 2GB of disk space used.
+
+# - 0ff4:err:winediag:ntlm_check_version ntlm_auth was not found. Make sure that ntlm_auth >= 3.0.25 is in your path. Usually, you can find it in the winbind package of your distribution.
+#   0ff4:err:ntlm:ntlm_LsaApInitializePackage no NTLM support, expect problems.
+#   Fix: install winbind on Debian-based systems.
+FROM wine_console AS wine_ui
+ENV DEBIAN_FRONTEND="noninteractive"
+RUN apt-get update \
+    && (DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends \
+        xvfb xrdp x11vnc) \
+    && rm -rf /var/lib/apt/lists/*
+
+# This script can be used to set-up an X11 server and an VNC server for it.
+# TODO: Set-up xrdp as well.
+COPY --chmod=744 xsetup.sh /root/xsetup.sh
+
+# Expose port 5900 which is the default VNC port.
+EXPOSE 5900/tcp
+
+# Expose port which is the default RDP port.
+# The udp version is used for acceleration.
+EXPOSE 3389/tcp
+EXPOSE 3389/udpp
+
+# xsetup.sh is configured to run the X11 server on display :1.
+ENV DISPLAY=:1
+
+# Start bash and run the X11 set-up.
+CMD [ "/bin/bash", "--init-file", "/root/xsetup.sh" ]
+
+# TODO: Handle how to add software to the container.
+#
+# - To Install via a MSI
+#   $ msiexec /i MySetup.msi /QN /L*V setup.log
+
+# Set-up another image which has .NET 48 installed.
+#
+# $ podman build -f Containerfile.wine10 --tag ubuntu:24.04-wine10-dotnet48 --target wine_ui_dotnet
+# $ podman run -p 25900:5900 --rm -it localhost/ubuntu:24.04-wine10-dotnet48
+FROM wine_ui AS wine_ui_dotnet
+RUN (WINEDLLOVERRIDES="mscoree=" sh /root/winetricks -q dotnet48)
+# Disabling mscoree prevents the prompt for "Install Wine Mono" as this is
+# installing .NET Framework 4.8, it doesn't need mono.
