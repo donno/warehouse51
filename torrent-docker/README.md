@@ -37,7 +37,7 @@ profile, will start a web-ui that can be used to connect to the leachers or
 seeders to see how much they have downloaded and uploaded.
 
 Ideally, I want something better to show the system work as well as provide
-command for restaring the torrent creation so you can add new files while it
+command for restarting the torrent creation so you can add new files while it
 is running.
 
 How it works
