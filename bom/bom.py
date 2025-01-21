@@ -174,9 +174,9 @@ def read_solar_exposure_data(path: pathlib.Path | str, grid_file_callback):
             ):
                 # This handles the case if the tar have been extracted.
                 unwrap_data(item, grid_file_callback)
-    elif path.name.startswith(tar_name_prefix) and item.suffix == ".tar":
-        unwrap_data(item, grid_file_callback)
-    elif item.name.startswith("solar.") and item.name.endswith(
+    elif path.name.startswith(tar_name_prefix) and path.suffix == ".tar":
+        unwrap_data(path, grid_file_callback)
+    elif path.name.startswith("solar.") and path.name.endswith(
                 single_file_extensions,
             ):
-        unwrap_data(item, grid_file_callback)
+        unwrap_data(path, grid_file_callback)
