@@ -116,8 +116,8 @@ namespace
 template<typename TYPE>
 std::optional<TYPE> local::NoDataValue(TIFF* Tiff)
 {
-if defined(__GLIBCXX__) && (__GLIBCXX__ == 20190406 || \
-                            __GLIBCXX__ == 20210601)
+#if defined(__GLIBCXX__) && (__GLIBCXX__ == 20190406 || \
+                             __GLIBCXX__ == 20210601)
     // This version of libstd++ doesn't have a std::from_chars() that works
     // with floating-point.
     constexpr bool hasFromChars = !std::is_floating_point_v<TYPE>;
@@ -302,21 +302,17 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
 
     const auto bitsPerSample = metadata.bitsPerSample;
 
-    std::optional<float> noDataValueFloat;
-    std::optional<double> noDataValueDouble;
-    std::optional<int16_t> noDataValueInt;
-    std::optional<uint16_t> noDataValueUnsignedInt;
     if (metadata.sampleFormat == SAMPLEFORMAT_IEEEFP)
     {
         printf("Samples are in IEEE floating point format with %d bits per "
                "sample.\n", bitsPerSample);
         if (bitsPerSample == 32)
         {
-            noDataValueFloat = local::NoDataValue<float>(Tiff);
+            metadata.noDataValueFloat = local::NoDataValue<float>(Tiff);
         }
         else if (bitsPerSample == 64)
         {
-            noDataValueDouble = local::NoDataValue<double>(Tiff);
+            metadata.noDataValueDouble = local::NoDataValue<double>(Tiff);
         }
         else
         {
@@ -330,7 +326,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            noDataValueInt = local::NoDataValue<int16_t>(Tiff);
+            metadata.noDataValueInt = local::NoDataValue<int16_t>(Tiff);
         }
         else
         {
@@ -344,7 +340,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         printf("Samples are signed integer.\n");
         if (bitsPerSample == 16)
         {
-            noDataValueInt = local::NoDataValue<uint16_t>(Tiff);
+            metadata.noDataValueInt = local::NoDataValue<uint16_t>(Tiff);
         }
         else
         {
@@ -627,7 +623,8 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
         }
         else if (bitsPerSample == 64)
         {
-            noDataValueDouble = local::NoDataValue<double>(Tiff);
+            auto noDataValue = local::NoDataValue<double>(Tiff);
+            local::ReadViaScanLinesInternal(Tiff, noDataValue, Importer);
         }
         else
         {
