@@ -337,7 +337,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
     }
     else if (metadata.sampleFormat == SAMPLEFORMAT_UINT)
     {
-        printf("Samples are signed integer.\n");
+        printf("Samples are unsigned integer.\n");
         if (bitsPerSample == 16)
         {
             metadata.noDataValueInt = local::NoDataValue<uint16_t>(Tiff);
@@ -345,7 +345,7 @@ local::TiledMetadata local::ReadTiledMetadata(TIFF* Tiff)
         else
         {
             fprintf(stderr,
-                    "Expected 16-bits per sample (16-bit signed integer) got "
+                    "Expected 16-bits per sample (16-bit unsigned integer) got "
                     "%d bits per sample.\n", bitsPerSample);
         }
     }
@@ -615,7 +615,8 @@ void TiffTools::ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer)
 
     if (sampleFormat == SAMPLEFORMAT_IEEEFP)
     {
-        printf("Samples are in IEEE floating point format.\n");
+        printf("Samples are in IEEE floating point format with %d bits per "
+               "sample.\n", bitsPerSample);
         if (bitsPerSample == 32)
         {
             auto noDataValue = local::NoDataValue<float>(Tiff);
