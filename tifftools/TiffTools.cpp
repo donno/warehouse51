@@ -384,8 +384,6 @@ void local::ReadTile(
             return Stride;
         };
 
-    const local::Rect tileExtent =
-        { 0, 0, Metadata.tileLength, Metadata.tileWidth };
 
     // Determine the max width and height to read to. If the image is
     // not an exact multiple of the tile size then remaining tile will
@@ -393,7 +391,11 @@ void local::ReadTile(
     const auto validWidth = trueTileDimension(
         X, Metadata.imageWidth, Metadata.tileWidth);
     const auto validLength = trueTileDimension(
-        Y, Metadata.imageLength, Metadata.tileLength);
+        Y, Metadata.imageLength, Metadata.tileLength); // Or height.
+
+    const local::Rect tileExtent =
+        { 0, 0, validWidth, validLength};
+
 
     std::size_t cellsWithData = 0;
     if (Metadata.Is(SAMPLEFORMAT_INT, 16))
