@@ -82,6 +82,7 @@ namespace
     template<typename VALUE_TYPE>
     std::size_t WriteTileToGrid(
         Rect Tile,
+        uint32_t FullTileWidth,
         const VALUE_TYPE* Values,
         std::optional<VALUE_TYPE> NoDataValue,
         TiffTools::IElevationImporter* Grid);
@@ -186,6 +187,7 @@ bool local::TiledMetadata::Is(
 template<typename VALUE_TYPE>
 std::size_t local::WriteTileToGrid(
     Rect Tile,
+    uint32_t FullTileWidth,
     const VALUE_TYPE* Values,
     std::optional<VALUE_TYPE> NoDataValue,
     IElevationImporter* Grid)
@@ -207,6 +209,11 @@ std::size_t local::WriteTileToGrid(
                 Grid->FlagNoData(Tile.x + column, Tile.height - (Tile.y + row) - 1);
             }
         }
+
+        // Account for the difference in the tile's width and the expected
+        // width. For example, when the image is not a multiple of the cell
+        // size.
+        Values += FullTileWidth - Tile.width;
     }
 
     return withDataCount;
@@ -404,7 +411,8 @@ void local::ReadTile(
         // 16-bit.
         auto values = static_cast<int16_t*>(Buffer);
         cellsWithData = WriteTileToGrid(
-            tileExtent, values, Metadata.noDataValueInt, Importer);
+            tileExtent, Metadata.tileWidth, values, Metadata.noDataValueInt,
+            Importer);
     }
     else if (Metadata.Is(SAMPLEFORMAT_UINT, 16))
     {
@@ -412,8 +420,8 @@ void local::ReadTile(
         // and 16-bit.
         auto values = static_cast<uint16_t*>(Buffer);
         cellsWithData = WriteTileToGrid(
-            tileExtent, values, Metadata.noDataValueUnsignedInt,
-            Importer);
+            tileExtent, Metadata.tileWidth, values,
+            Metadata.noDataValueUnsignedInt, Importer);
     }
     else if (Metadata.Is(SAMPLEFORMAT_IEEEFP, 32))
     {
@@ -421,7 +429,8 @@ void local::ReadTile(
         // 32-bits.
         auto values = static_cast<float*>(Buffer);
         cellsWithData = WriteTileToGrid(
-            tileExtent, values, Metadata.noDataValueFloat, Importer);
+            tileExtent, Metadata.tileWidth, values, Metadata.noDataValueFloat,
+            Importer);
     }
     else if (Metadata.Is(SAMPLEFORMAT_IEEEFP, 64))
     {
@@ -429,7 +438,8 @@ void local::ReadTile(
         // 64-bits.
         auto values = static_cast<double*>(Buffer);
         cellsWithData = WriteTileToGrid(
-            tileExtent, values, Metadata.noDataValueDouble, Importer);
+            tileExtent, Metadata.tileWidth, values, Metadata.noDataValueDouble,
+            Importer);
     }
     else
     {

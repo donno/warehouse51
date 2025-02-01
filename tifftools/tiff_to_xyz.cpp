@@ -58,11 +58,11 @@ void XyzExporter::SetValue(int X, int Y, double Value)
     // While debugging, use this to figure out how the indexing is wrong.
     // This has already helped fix one bug, however it means the Value is
     // wrong for some of the data.
-    printf("%d %d %.f\n", pixelX, pixelY, worldZ);
+    //printf("%d %d %.f\n", pixelX, pixelY, worldZ);
 
-    // const auto worldX = myTileLowerBound.x + pixelX * myTileCellSize.x;
-    // const auto worldY = myTileLowerBound.y + pixelY * myTileCellSize.y;
-    // printf("%f %f %f\n", worldX, worldY, worldZ);
+    const auto worldX = myTileLowerBound.x + pixelX * myTileCellSize.x;
+    const auto worldY = myTileLowerBound.y + pixelY * myTileCellSize.y;
+    printf("%f %f %f\n", worldX, worldY, worldZ);
 }
 
 int main(int argc, char* argv[])
