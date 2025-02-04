@@ -18,8 +18,8 @@
 // Imports the elevation from GeoTIFF and exports to the XYZ format.
 struct XyzExporter : public TiffTools::IElevationImporter
 {
-  XyzExporter(TiffTools::Point2D LowerBound)
-  : myOverallLowerBound(LowerBound) {}
+  XyzExporter(TiffTools::Point2D LowerBound, FILE* Output)
+  : myOverallLowerBound(LowerBound), myOutput(Output) {}
 
   void BeginTile(TiffTools::Point2D LowerBound,
                  TiffTools::Point2D UpperBound,
@@ -35,6 +35,8 @@ struct XyzExporter : public TiffTools::IElevationImporter
 
   TiffTools::Point2D myOverallLowerBound;
   TiffTools::Vector2D myTileCellSize;
+
+  FILE* myOutput;
 };
 
 void XyzExporter::BeginTile(
@@ -61,14 +63,14 @@ void XyzExporter::SetValue(int X, int Y, double Value)
     //printf("%d %d %.f\n", pixelX, pixelY, worldZ);
     const auto worldX = myTileLowerBound.x + X * myTileCellSize.x;
     const auto worldY = myTileLowerBound.y + Y * myTileCellSize.y;
-    printf("%f %f %f\n", worldX, worldY, worldZ);
+    fprintf(myOutput, "%f %f %f\n", worldX, worldY, worldZ);
 }
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc != 2 && argc != 3)
     {
-        fprintf(stderr, "usage: %s tiff_path\n", argv[0]);
+        fprintf(stderr, "usage: %s tiff_path [xyz_path]\n", argv[0]);
         return 1;
     }
 
@@ -83,11 +85,12 @@ int main(int argc, char* argv[])
 
     std::unique_ptr<TIFF, void (*)(TIFF*)> tiff(tif, TIFFClose);
 
+    FILE* output = argc == 3 ? fopen(argv[2], "w") : stdout;
     try
     {
         const auto&& [lowerLeft, upperRight] = 
             TiffTools::Bounds(tif, TiffTools::CellSize(tif));
-        XyzExporter importer(lowerLeft);
+        XyzExporter importer(lowerLeft, output);
         if (TIFFIsTiled(tif))
         {
             ReadViaTiles(tif, &importer);
@@ -102,5 +105,8 @@ int main(int argc, char* argv[])
         fprintf(stderr, "%s\n", exception.what());
         return 1;
     }
+
+    if (argc == 3) fclose(output);
+
     return 0;
 }
