@@ -10,6 +10,8 @@ The goal of this project is to:
 
 * Uses [Simple DirectMedia Layer (SDL)](SDL) for interacting with
   graphics hardware.
+* Uses [chess-library](2) by [Disservin](3) for parsing PGN (Portable Game
+  Notation) parsing and board state.
 
 ## Third Party
 
@@ -18,6 +20,9 @@ The goal of this project is to:
   This is chess_merida_unicode.ttf within repository and distribution.
 - The SIL Open Font License 1.1 applies to [IBM Plex Sans font](1).
   This is IBMPlexSans-Regular.ttf  within repository and distribution.
+- The chess pieces are using the celtic set by [maurimo](4) which is
+  licenced under a MIT licence.
+
 
 ## Done
 
@@ -25,6 +30,7 @@ The goal of this project is to:
 * Render the chess board
 
 ## TODO
+
 Almost everything
 
 * Set-up build system
@@ -41,3 +47,6 @@ Almost everything
 [SDL]: https://libsdl.org/
 [0]: https://github.com/xeyownt/chess_merida_unicode
 [1]: https://github.com/IBM/plex
+[2]: https://github.com/Disservin/chess-library
+[3]: https://github.com/Disservin
+[4]: https://github.com/maurimo/chess-art
