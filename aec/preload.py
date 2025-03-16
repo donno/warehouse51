@@ -484,6 +484,104 @@ def load_event(path):
         yield _election(election), [_contest(contest) for contest in contests]
 
 
+def load_results(path):
+    """Load the the results from the preload data.
+
+    This is essentially the votes the candidates received from past election
+    with all zeroes for the votes for the current election.
+
+    """
+    xml = load(path, '-results-')
+    created = xml.find('./amf:Cycle', NAMESPACES).attrib['Created']
+    results = xml.find('./amf:Results', NAMESPACES)
+    if results.attrib["Phase"] != "Preload":
+        raise ValueError("The results should be for the preload phrase")
+
+    # Available information:
+    # - ./eml:ManagingAuthority/eml:AuthorityIdentifier
+    # - ./amf:MessageLanguage
+    # - ./amf:MessageGenerator (Name, Environment, Site, Server, Platform,
+    #    Version)
+    # - ./amf:Cycle - Created attribute and UUID as the text.
+    # - ./amf:Results
+    event = _event(results)
+    elections = results.findall('./amf:Election', NAMESPACES)
+    # The ./amf:Election element contains:
+    # - eml:ElectionIdentifier
+    # - House or Senate
+    #
+    # The House and Senate element contains Contests and Analysis
+
+    def _candidate_votes(candidate_xml: ElementTree.Element):
+        # The name of the candidate and their affiliation is provided but
+        # not used.
+        candidate = Candidate(candidate_xml)
+        votes = candidate_xml.find('./amf:Votes', NAMESPACES)
+        votes_by_type = candidate_xml.findall('./amf:VotesByType/amf:Votes',
+                                              NAMESPACES)
+
+        return {
+            'candidateId': candidate.identifier,
+            'affiliationId':
+                candidate.affiliation.id if candidate.affiliation else None,
+            # This could be wrapped into a "Totals".
+            'votesTotal': int(votes.text),
+            #'votesPercentage': int(votes.attrib['Percentage']),
+            #'votesQuotaProportion': int(votes.attrib['QuotaProportion']),
+            'votes': {
+                vote.attrib["Type"][0].lower() + vote.attrib["Type"][1:]:
+                int(vote.text)
+                for vote in votes_by_type
+            }
+        }
+
+    for election in elections:
+        election_as_dict = _election(election)
+
+        # Handle contests
+        contests = []
+        for contest in election.findall(".//amf:Contests/amf:Contest",
+                                        NAMESPACES):
+            # A Contest has a:
+            # - ContestIdentifier
+            # - PollingDistrictIdentifier or StateIdentifier
+            # - Enrolment
+            # - FirstPreferences
+            # - TwoCandidatePreferred
+            # - TwoPartyPreferred
+            # - PollingPlaces
+            #
+            # The Enrolment and PollingPlaces would be useful for loading
+            # outside the results themselves. The PollingPlaces has historic
+            # number of votes for the candidate at the polling place.
+            contest_id = contest.find('./eml:ContestIdentifier', NAMESPACES)
+
+
+            if election_as_dict["category"] == "Senate":
+                # The senate are split into groups.
+                # TODO: Sort out supporting the senate being split into groups.
+                contests.append({
+                    'id': contest_id.attrib['Id'],
+                })
+                continue
+
+            candidates = contest.findall('./amf:FirstPreferences/amf:Candidate',
+                                         NAMESPACES)
+
+            contests.append({
+                'id': contest_id.attrib['Id'],
+                'candidates': [
+                    _candidate_votes(candidate) for candidate in candidates
+                ],
+            })
+
+        yield {
+            'event': event,
+            'election': election_as_dict,
+            'created': created,
+        }, contests
+
+
 def _event(parent_element: ElementTree.Element) -> dict:
     """Return the event information from an XML element.
 

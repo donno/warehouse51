@@ -20,6 +20,7 @@ For web based interface to integrate the data stored:
 """
 
 # Standard library imports
+import datetime
 import pathlib
 
 # Third party imports
@@ -66,6 +67,33 @@ async def import_preload_event(
 
     await database.elections.insert_many(all_elections)
     await database.contests.insert_many(all_contests)
+
+
+async def import_preload_results(
+    preload_location: pathlib.Path, database: AsyncIOMotorDatabase
+) -> None:
+    """Import the results from preload information into the database.
+
+    This is essentially the votes the candidates received from past election
+    with all zeroes for the votes for the current election.
+    """
+    # TODO: conditionally create this collection.
+    await database.create_collection(
+            "results",
+            timeseries={
+                "timeField": "timestamp",
+                "metaField": "eventContest",
+            },
+        )
+
+    for election, contests in preload.load_results(preload_location):
+        timestamp = datetime.datetime.fromisoformat(election["created"])
+        for contest in contests:
+            contest["timestamp"] = timestamp
+            contest["eventId"] = election["event"]["id"]
+            contest["contestId"] = contest.pop("id")
+            contest["eventContest"] =  contest["eventId"] + "-" + contest["contestId"]
+            await database.results.insert_one(contest)
 
 
 async def import_preload(
@@ -118,6 +146,8 @@ async def import_preload(
     await database.candidates.insert_many(all_candidates)
 
     await import_preload_event(preload_location, database)
+
+    await import_preload_results(preload_location, database)
 
 
 PATH = (
