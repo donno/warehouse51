@@ -298,24 +298,6 @@ def load_candidates(path, *, election_category=None):
     election category will be included.
     """
 
-    def _event(candidates):
-        """Return the event information from the candidate list XML element."""
-        event_id = candidates.find('./eml:EventIdentifier', NAMESPACES)
-        return {
-            'id': event_id.attrib['Id'],
-            'name': event_id.find('./eml:EventName', NAMESPACES).text,
-        }
-
-    def _election(election):
-        """Return the election information from an election XML element."""
-        election_id = election.find('./eml:ElectionIdentifier', NAMESPACES)
-        return {
-            'id': election_id.attrib['Id'],
-            'name': election_id.find('./eml:ElectionName', NAMESPACES).text,
-            'category': election_id.find('./eml:ElectionCategory',
-                                         NAMESPACES).text
-        }
-
     def _contest(contest):
         """Return the contest information from an contest XML element."""
         contest_id = contest.find('./eml:ContestIdentifier', NAMESPACES)
@@ -421,6 +403,120 @@ def load_polling_districts(path):
             for element in district.findall(
             './amf:PollingPlaces/amf:PollingPlace', NAMESPACES)
         ]
+
+def load_event(path):
+    """Load the the event and elections for the event.
+
+    Yields the event, authority then the elections.
+
+    Usage
+    -----
+    >>> event, authority, *elections = preload.load_event(PATH)
+    """
+    xml = load(path, '-event-')
+    events = xml.findall('./eml:ElectionEvent', NAMESPACES)
+    if len(events) > 1:
+        raise ValueError("Only expected a single election event")
+
+    event = events[0]
+
+    def _address(element: ElementTree.Element):
+        """Parse the AddressLines element from within the given element."""
+        address_lines = element.findall(
+            './xal:AddressLines/xal:AddressLine',
+            NAMESPACES)
+
+        def type_to_json_key(address_type):
+            if address_type == 'AddressLine1':
+                return 'address'
+            if address_type == 'AddressLine2':
+                return 'address2'
+            # TODO: merge AddressLine1 and AddressLine2 into a single element
+            # with a list.
+            return address_type.lower()
+
+        address = {
+            type_to_json_key(line.attrib["Type"]): line.text
+            for line in address_lines
+        }
+        return address
+
+    def _authority(event: ElementTree.Element):
+        authority_id = event.find(
+            './eml:ManagingAuthority/eml:AuthorityIdentifier',
+            NAMESPACES)
+        authority_address = event.find(
+            './eml:ManagingAuthority/eml:AuthorityAddress',
+            NAMESPACES)
+
+        return {
+            'id': authority_id.attrib['Id'],
+            'name': authority_id.text.strip(),
+            'address': _address(authority_address),
+            'addressType': authority_address.attrib['AddressType'],
+            }
+
+    def _contest(contest: ElementTree.Element) -> dict:
+        """Return the contest information from an contest XML element."""
+        contest_id = contest.find('./eml:ContestIdentifier', NAMESPACES)
+        area = contest.find('./eml:Area', NAMESPACES)
+        position = contest.find('./eml:Position', NAMESPACES)
+        return {
+            'id': contest_id.attrib['Id'],
+            'short_code': contest_id.attrib.get('ShortCode', None),
+            'name': contest_id.find('./eml:ContestName', NAMESPACES).text,
+            'position': '' if position is None else position.text,
+            'voting_method': contest.find('./eml:VotingMethod', NAMESPACES).text,
+            'max_votes': int(contest.find('./eml:MaxVotes', NAMESPACES).text),
+            'position_count': int(contest.find('./eml:NumberOfPositions', NAMESPACES).text),
+            'area': {
+                'id': area.attrib['Id'],
+                'type': area.attrib['Type'],
+                'name': area.text,
+            }
+        }
+
+    yield _event(event)
+    yield _authority(event)
+
+    for election in event.findall('./eml:Election', NAMESPACES):
+        contests = election.findall('./eml:Contest', NAMESPACES)
+        yield _election(election), [_contest(contest) for contest in contests]
+
+
+def _event(parent_element: ElementTree.Element) -> dict:
+    """Return the event information from an XML element.
+
+    This works with an ElectionEvent or CandidateList element.
+    """
+    event_id = parent_element.find('./eml:EventIdentifier', NAMESPACES)
+    return {
+        'id': event_id.attrib['Id'],
+        'name': event_id.find('./eml:EventName', NAMESPACES).text,
+    }
+
+
+def _election(election: ElementTree.Element) -> dict:
+    """Return the election information from an election XML element."""
+    def _type_to_json_key(date_type):
+        return {
+            'PollingDay': 'pollingDay',
+        }[date_type]
+
+    dates = {
+        _type_to_json_key(date.attrib['Type']):
+        date.find("./eml:SingleDate", NAMESPACES).text
+        for date in election.findall('./eml:Date', NAMESPACES)
+    }
+
+    election_id = election.find('./eml:ElectionIdentifier', NAMESPACES)
+    return {
+        'id': election_id.attrib['Id'],
+        'name': election_id.find('./eml:ElectionName', NAMESPACES).text,
+        'category': election_id.find('./eml:ElectionCategory',
+                                        NAMESPACES).text,
+        **dates
+    }
 
 
 PATH = 'data/aec-mediafeed-Detailed-Preload-24310-20190515152735.zip'
