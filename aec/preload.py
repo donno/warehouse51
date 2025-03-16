@@ -331,7 +331,7 @@ def load_candidates(path, *, election_category=None):
             ]
 
             for c in actual_candidates:
-                yield election_as_dict, _contest(contest), c
+                yield event, election_as_dict, _contest(contest), c
 
 
 
@@ -339,7 +339,7 @@ def report_professions():
     """Report on the different professions of each candidate."""
     profession_counter = collections.Counter(
         candidate.profession
-        for _, _, candidate in load_candidates(PATH)
+        for _, _, _, candidate in load_candidates(PATH)
         if candidate.profession
     )
 
@@ -359,7 +359,7 @@ def report_email_domains():
 
     domain_counter = collections.Counter(
         _domain(candidate.email)
-        for _, _, candidate in load_candidates(PATH)
+        for _, _, _, candidate in load_candidates(PATH)
         if candidate.email
         # and candidate.independent
     )
@@ -377,7 +377,7 @@ def report_affiliations():
 
     affiliation_counter = collections.Counter(
         candidate.affiliation.name
-        for _, _, candidate in load_candidates(PATH)
+        for _, _, _, candidate in load_candidates(PATH)
         if candidate.affiliation
     )
 

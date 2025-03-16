@@ -35,12 +35,48 @@ DEFAULT_MONGODB_PORT = 27017
 """The default port for MongoDB"""
 
 
-async def import_preload(preload_location: pathlib.Path,
-                         database: AsyncIOMotorDatabase) -> None:
+async def import_preload_event(
+    preload_location: pathlib.Path, database: AsyncIOMotorDatabase
+) -> None:
+    """Import the event preload information into the database."""
+    event, authority, *elections = preload.load_event(preload_location)
+
+    await database.events.insert_one(
+        {
+            "authority": authority,
+            **event,
+        }
+    )
+
+    all_elections = []
+    all_contests = []
+
+    for election, contests in elections:
+        all_elections.append({**election, "event": event["id"]})
+
+        for contest in contests:
+            contest["_id"] = f'{event["id"]}-{election["id"]}-{contest["id"]}'
+            contest.update(
+                {
+                    "event": event["id"],
+                    "election": election["id"],
+                }
+            )
+            all_contests.append(contest)
+
+    await database.elections.insert_many(all_elections)
+    await database.contests.insert_many(all_contests)
+
+
+async def import_preload(
+    preload_location: pathlib.Path, database: AsyncIOMotorDatabase
+) -> None:
     """Import the preload information into the database.
 
     This loads the polling districts at this time.
     """
+    await import_preload_results(preload_location, database)
+    return
 
     def _add_district_id(place: dict, district_id: str) -> dict:
         """Add the identifier for the district to the place."""
@@ -59,15 +95,29 @@ async def import_preload(preload_location: pathlib.Path,
     await database.districts.insert_many(districts)
     await database.places.insert_many(all_places)
 
-    # TOOD: Load the elections, this is in the events file.
-    # TODO: Load the contents
-
     all_candidates = []
-    for election, contest, candidate in preload.load_candidates(
-            preload_location):
+    for event, election, contest, candidate in preload.load_candidates(
+        preload_location
+    ):
         all_candidates.append(candidate.to_dict())
-        all_candidates[-1]["_id"] = all_candidates[-1].pop("id")
+        id_parts = [
+            event["id"],
+            election["id"],
+            contest["id"],
+            candidate.identifier,
+        ]
+        all_candidates[-1].update(
+            {
+                "_id": "-".join(id_parts),
+                "event": event["id"],
+                "election": election["id"],
+                "contest": contest["id"],
+            }
+        )
+
     await database.candidates.insert_many(all_candidates)
+
+    await import_preload_event(preload_location, database)
 
 
 PATH = (
