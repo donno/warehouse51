@@ -60,6 +60,12 @@ class Candidate:
         )
 
     @property
+    def identifier(self) -> str:
+        """The unique ID for the candidate."""
+        return self.xml.find('./eml:CandidateIdentifier',
+                             NAMESPACES).attrib['Id']
+
+    @property
     def name(self) -> str:
         """The name of the candidate from their candidate identifier.
 
@@ -80,8 +86,25 @@ class Candidate:
         profession = self.xml.find('./eml:Profession', NAMESPACES)
         return None if profession is None else profession.text
 
+    @property
+    def gender(self):
+        gender = self.xml.find('./eml:Gender', NAMESPACES)
+        return None if gender is None else gender.text
+
     def __repr__(self):
         return f'Candidate("{self.name}")'
+
+    def to_dict(self) -> dict:
+        """Return a JSON-compatible representation of the candidate."""
+        return {
+            "id": self.identifier,
+            "name": self.name,
+            "email": self.email,
+            "profession": self.profession,
+            "affiliation": vars(self.affiliation) if self.affiliation else None,
+            "independent": self.independent,
+            "gender": self.gender,
+        }
 
 
 class PollingDistrict:
@@ -98,38 +121,51 @@ class PollingDistrict:
                                          NAMESPACES)
 
     @property
-    def identifier(self):
+    def identifier(self) -> str:
         """The unique ID for the polling district."""
         return self._identifier.attrib['Id']
 
     @property
-    def short_code(self):
+    def short_code(self) -> str:
         """The four letter code used to represent the polling district."""
         return self._identifier.attrib['ShortCode']
 
     @property
-    def name(self):
+    def name(self) -> str:
         """The name of the polling district."""
         return self._identifier.find('./amf:Name', NAMESPACES).text
 
     @property
-    def state(self):
+    def state(self) -> str:
         """The state in which the polling district is located."""
         return self._identifier.find('./amf:StateIdentifier',
                                      NAMESPACES).attrib['Id']
 
     @property
-    def area(self):
+    def area(self) -> int | None:
         """The approximate area covered by the polling district in sq KMs."""
-        return int(self._identifier.find('./amf:Area', NAMESPACES).text)
+        area = self.xml.find('./amf:Area', NAMESPACES)
+        return None if area is None else int(area.text)
 
     @property
-    def name_source(self):
+    def name_source(self) -> str:
         """Describes derivation of the polling district name."""
-        return self._identifier.find('./amf:NameDerivation', NAMESPACES).text
+        derivation = self.xml.find('./amf:NameDerivation', NAMESPACES)
+        return '' if derivation is None else derivation.text
 
     def __repr__(self):
         return f'PollingDistrict("{self.name}", "{self.state}")'
+
+    def to_dict(self) -> dict:
+        """Return a JSON-compatible representation of the polling district."""
+        return {
+            "id": self.identifier,
+            "shortCode": self.short_code,
+            "name": self.name,
+            "state": self.state,
+            "area": self.area,
+            "nameSource": self.name_source,
+        }
 
 
 class PollingPlace:
@@ -167,10 +203,65 @@ class PollingPlace:
             float(gps.find('./xal:AddressLongitude', NAMESPACES).text),
         )
 
+    @property
+    def address(self) -> list[str]:
+        """The name of the address of the premises."""
+        result = self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="AddressLine1"]',
+            NAMESPACES)
+        result_second = self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="AddressLine2"]',
+            NAMESPACES)
+
+        address_lines = []
+        if result is not None:
+            address_lines.append(result.text)
+        if result_second is not None:
+            address_lines.append(result_second.text)
+        return address_lines
+
+    @property
+    def suburb(self) -> str | None:
+        """The name of the suburb where the premises is located."""
+        result = self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="Suburb"]',
+            NAMESPACES)
+        return None if result is None else result.text
+
+    @property
+    def state(self):
+        """The name of the state where the premises is located."""
+        return self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="State"]',
+            NAMESPACES).text
+
+    @property
+    def postcode(self) -> int | None:
+        """The name of the state where the premises is located."""
+        # This can be missing if the Premises is "Multiple sites"
+        result = self._address.find(
+            './xal:AddressLines/xal:AddressLine[@Type="Postcode"]',
+            NAMESPACES)
+        return None if result is None else result.text
+
+    # TODO: Consider exposing wheelchair access.
+
     # Other information that could be included is more details about the
     # address of the polling place  address line, suburb, state and postcode.
     def __repr__(self):
         return f'PollingPlace("{self.name}" @ {self.lat_long})'
+
+    def to_dict(self) -> dict:
+        """Return a JSON-compatible representation of the polling place."""
+        return {
+            "name": self.name,
+            "latitude": self.lat_long[0],
+            "longitude": self.lat_long[1],
+            "address": self.address,
+            "suburb": self.suburb,
+            "state": self.state,
+            "postcode": self.postcode,
+        }
 
 
 def load(path, name_fragment):
