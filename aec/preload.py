@@ -494,8 +494,10 @@ def load_results(path):
     xml = load(path, '-results-')
     created = xml.find('./amf:Cycle', NAMESPACES).attrib['Created']
     results = xml.find('./amf:Results', NAMESPACES)
-    if results.attrib["Phase"] != "Preload":
-        raise ValueError("The results should be for the preload phrase")
+    phase = results.attrib["Phase"]
+    if phase != "Preload":
+        message = f"The results should be for the preload phrase not {phase}"
+        raise ValueError(message)
 
     # Available information:
     # - ./eml:ManagingAuthority/eml:AuthorityIdentifier
