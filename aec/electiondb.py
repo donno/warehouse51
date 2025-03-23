@@ -30,6 +30,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 # Our imports
 import preload
+import mediafeed
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).parent
 
@@ -86,13 +87,8 @@ async def import_preload_results(
             )
 
     for election, contests in preload.load_results_from_path(preload_location):
-        timestamp = datetime.datetime.fromisoformat(election["created"])
-        for contest in contests:
-            contest["timestamp"] = timestamp
-            contest["eventId"] = election["event"]["id"]
-            contest["contestId"] = contest.pop("id")
-            contest["eventContest"] =  contest["eventId"] + "-" + contest["contestId"]
-            await database.results.insert_one(contest)
+        contests_to_save = _convert_contests(election, contests)
+        await database.results.insert_many(contests_to_save)
 
 
 async def import_preload(
@@ -148,11 +144,50 @@ async def import_preload(
     await import_preload_results(preload_location, database)
 
 
+async def import_results(
+    results_directory: pathlib.Path, database: AsyncIOMotorDatabase
+) -> None:
+    """Import the results  into the database.
+
+    The results directory is expected to contain ZIP files, with an XML file
+    containing the results for that point in time.
+    """
+    # result_zips = [
+    #     path
+    #     for path in results_directory.iterdir()
+    #     if path.suffix == ".zip"
+    # ]
+    # result_zip = next(iter(result_zips))
+
+    for eml in mediafeed.emls(results_directory):
+        for election, contests in preload.load_results(eml):
+            contests_to_save = _convert_contests(election, contests)
+            await database.results.insert_many(contests_to_save)
+
+    #print(result_zip)
+
+
+def _convert_contests(election: dict, contests) -> list[dict]:
+    """Convert the contests to JSON for the database."""
+    timestamp = datetime.datetime.fromisoformat(election["created"])
+
+    contests_to_save = []
+    for contest in contests:
+        contest["timestamp"] = timestamp
+        contest["eventId"] = election["event"]["id"]
+        contest["contestId"] = contest.pop("id")
+        contest["eventContest"] =  contest["eventId"] + "-" + contest["contestId"]
+        contests_to_save.append(contest)
+    return contests_to_save
+
+
 PRELOAD = (
     SCRIPT_DIRECTORY
     / "data"
     / "aec-mediafeed-Detailed-Preload-27966-20220518111207.zip"
 )
+
+DIRECTORY = pathlib.Path("Y:\\24310_2019_Election\\Detailed_Verbose")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -176,3 +211,11 @@ if __name__ == "__main__":
     # a poling district always has set number of fields so do the polling place.
     loop.run_until_complete(import_preload(PRELOAD, db))
 
+
+    # Import past election results.
+    #
+    # This will import contests which have no changes since the previous entry
+    # that is to say, no additional votes have been tallied. It may be better
+    # to improve this so compares entries with the previous or next entry
+    # before saving them.
+    loop.run_until_complete(import_results(DIRECTORY, db))
