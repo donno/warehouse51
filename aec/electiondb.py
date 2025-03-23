@@ -77,14 +77,15 @@ async def import_preload_results(
     This is essentially the votes the candidates received from past election
     with all zeroes for the votes for the current election.
     """
-    # TODO: conditionally create this collection.
-    await database.create_collection(
-            "results",
-            timeseries={
-                "timeField": "timestamp",
-                "metaField": "eventContest",
-            },
-        )
+    collection_names = await database.list_collection_names()
+    if not any(name == "results" for name in collection_names):
+        await database.create_collection(
+                "results",
+                timeseries={
+                    "timeField": "timestamp",
+                    "metaField": "eventContest",
+                },
+            )
 
     for election, contests in preload.load_results(preload_location):
         timestamp = datetime.datetime.fromisoformat(election["created"])
@@ -104,7 +105,6 @@ async def import_preload(
     This loads the polling districts at this time.
     """
     await import_preload_results(preload_location, database)
-    return
 
     def _add_district_id(place: dict, district_id: str) -> dict:
         """Add the identifier for the district to the place."""
