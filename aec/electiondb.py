@@ -85,7 +85,7 @@ async def import_preload_results(
                 },
             )
 
-    for election, contests in preload.load_results(preload_location):
+    for election, contests in preload.load_results_from_path(preload_location):
         timestamp = datetime.datetime.fromisoformat(election["created"])
         for contest in contests:
             contest["timestamp"] = timestamp

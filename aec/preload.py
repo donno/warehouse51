@@ -484,20 +484,25 @@ def load_event(path):
         yield _election(election), [_contest(contest) for contest in contests]
 
 
-def load_results(path):
-    """Load the the results from the preload data.
+def load_results_from_path(path):
+    """Load the results from a file preload data.
 
     This is essentially the votes the candidates received from past election
     with all zeroes for the votes for the current election.
-
     """
     xml = load(path, '-results-')
+    return load_results(xml)
+
+
+def load_results(xml):
+    """Load the results from the preload data.
+
+    This is essentially the votes the candidates received from past election
+    with all zeroes for the votes for the current election.
+    """
     created = xml.find('./amf:Cycle', NAMESPACES).attrib['Created']
     results = xml.find('./amf:Results', NAMESPACES)
     phase = results.attrib["Phase"]
-    if phase != "Preload":
-        message = f"The results should be for the preload phrase not {phase}"
-        raise ValueError(message)
 
     # Available information:
     # - ./eml:ManagingAuthority/eml:AuthorityIdentifier
@@ -579,6 +584,7 @@ def load_results(path):
 
         yield {
             'event': event,
+            'phase': phase,
             'election': election_as_dict,
             'created': created,
         }, contests
