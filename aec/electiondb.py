@@ -20,6 +20,7 @@ For web based interface to integrate the data stored:
 """
 
 # Standard library imports
+import argparse
 import datetime
 import pathlib
 
@@ -31,9 +32,6 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 import preload
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).parent
-
-DEFAULT_MONGODB_PORT = 27017
-"""The default port for MongoDB"""
 
 
 async def import_preload_event(
@@ -150,17 +148,25 @@ async def import_preload(
     await import_preload_results(preload_location, database)
 
 
-PATH = (
+PRELOAD = (
     SCRIPT_DIRECTORY
     / "data"
     / "aec-mediafeed-Detailed-Preload-27966-20220518111207.zip"
 )
 
-
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Populate a MongoDB database with election data.",
+    )
+    parser.add_argument("--db-host", type=str, default="localhost",
+                        help="The host name for the MongoDB server to use.")
+    parser.add_argument("--db-port", type=int, default=27017,
+                        help="The port for the MongoDB server to use.")
+
+    arguments = parser.parse_args()
     client = motor.motor_asyncio.AsyncIOMotorClient(
-        "localhost",
-        DEFAULT_MONGODB_PORT,
+        arguments.db_host,
+        arguments.db_port,
     )
     db = client.test_database
     db = client["aec"]
@@ -168,4 +174,5 @@ if __name__ == "__main__":
     loop = client.get_io_loop()
     # Preload might be better off in a sqlite database as the data is uniform
     # a poling district always has set number of fields so do the polling place.
-    loop.run_until_complete(import_preload(PATH, db))
+    loop.run_until_complete(import_preload(PRELOAD, db))
+
