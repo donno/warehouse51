@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{place.name}} - polling place{% endblock %}
+{% block heading %}{{place.name}} - polling place{% endblock %}
+{% block content %}
+  <ul>
+    <li>{{place.address}}</li>
+  </ul>
+
+  <table>
+    <caption>
+        First preferences
+    </caption>
+    <thead>
+        <tr>
+            <td>Candidate</td>
+            <td>Party</td>
+            <td>Votes</td>
+            <td>%</td>
+            <td>Swing (%)</td>
+        </tr>
+    </thead>
+    <tbody>
+    {% for candidate in candidates %}
+        <tr>
+            <td>{{ candidate.name }}</td>
+            <td>{{ candidate.party }}</td>
+            <td>{{ candidate.votes }}</td>
+            <td>{{ candidate.vote_percent }}</td>
+            <td>{{ candidate.swing_percent }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
