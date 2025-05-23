@@ -66,7 +66,17 @@ ln -sf /etc/init.d/agetty.ttyS0 /rootfs/etc/runlevels/default/agetty.ttyS0
 
 # Set root password.
 chroot /rootfs /bin/sh -c 'adduser root; echo -e "root\nroot" | passwd root'
-# Consider setting up additional users with the SSH keys.
+
+if [ -f users ]; then
+  if [ "$ENABLE_NETWORKING" -gt 0 ]; then
+    echo "Adding users."
+    awk -f process-users.awk users > /rootfs/new-users
+    chroot /rootfs /bin/sh /new-users
+    rm /rootfs/new-users
+  else
+    echo "Adding users relies on SSH keys, so doesn't allow interactive login."
+  fi
+fi
 
 # Configure the networking
 if [ "$ENABLE_NETWORKING" -gt 0 ]; then

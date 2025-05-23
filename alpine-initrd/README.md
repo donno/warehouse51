@@ -11,16 +11,31 @@ Prior Art
 * A very minimal example in a [Gist](1) by [gdamjan](0).
 * [firecracker-initrd](2) by [marcov](3) - The bulk of the script is based on this.
 
+Features
+--------
+
+* Set-up user accounts with their authorised key. \
+  See the section below for how to set it up.
+* Supports three flavours, specified via teh command line argument to the script.
+  * minimal - same as below without apk-tools
+  * plain - alpine-base
+  * standard - same as above plus util-linux, grep, nano and tmux
+
+When networking is enabled then iptables, iproute2 and openssh are installed.
+
+
 Missing features
 ----------------
 
 * No package mirror set-up for installing packages - Easily worked around by
   running `setup-apkrepos`if needed.
 * Configurable hostname.
-* Set-up user accounts, possibly with their authorised key.
 * Reduce the packages installed.
 * Customise to include extra packages.
-* If there is no `apk`, download and run the static binary instead.
+* If there is no `apk` for the runner of the script then download and run the
+  static binary instead.
+* Allow networking to be toggled off or on at runtime without editing the
+  script.
 
 How it Works
 ------------
@@ -44,14 +59,59 @@ uses `apk` from the system.
 * `/init` is set-up to be OpenRC.
 * The image is put together with `cpio`.
 
+### Users
+
+Create a text file called `users` in the same directory as the script.
+
+Start each line with the name of the user and the remaining with their SSH key
+This assumes that users will SSH into the machine rather than login
+interactively.
+```
+donno ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHMN+cIUeZaUdmT+kmwrGix5k9wXEUpHE2jQIma5JheW
+pooh ssh-ed25519 ....
+micky ssh-ed25519 ....
+tintin ssh-ed25519 ....
+```
+
+The script will parse the file and add users and set-up their keys.
+
+The plan was to have these accounts without passwords but sshd had other ideas,
+as the accounts are locked if you don't set a password including when SSHing
+so for now they have made-up passwords.
+
+Also see https://arlimus.github.io/articles/usepam/
+
 Components
 ----------
 
 - `/sbin/init` comes from `openrc`
 - `/etc/init.d/mdev` comes from `busybox-mdev-openrc`
 
+- If there is no internet then `apk-tools` is less useful unless you plan on
+  sourcing it from another storage device. If you do have internet then you
+  could fetch the static version to bootstrap installing apk-tools.
+
+QEMU
+----
+* To enable networking `-net nic -net user`
+* Forward port 22 (SSH) to 2222 on the host: `-net user,hostfwd=tcp::2222-:22`
+
 Additional Notes
 ----------------
+
+### Logging
+Start the syslog service:
+```sh
+rc-service syslog start
+```
+
+Next tail the log:
+```sh
+tail -f /var/log/messages
+```
+
+The above was used to try to diagnose why I was unable to ssh in to a new
+user account using a SSH key already set-up.
 
 ### Setting-up OpenRC
 The script uses this approach:
