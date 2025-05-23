@@ -4,11 +4,16 @@ if [ -z "$BASE_URI" ]; then
   exit 1
 fi
 
-echo Fetching initial disk image
-wget $BASE_URI/releases/$ARCH/netboot/initramfs-virt || exit $?
+if [ ! -f initramfs-virt ]; then
+  echo Fetching initial disk image
+  wget $BASE_URI/releases/$ARCH/netboot/initramfs-virt || exit $?
+fi
 
-echo Extract initial disk image for its kernel modules.
-(mkdir /tmp/original && cd /tmp/original && zcat /work/initramfs-virt | cpio -i)
+if [ -d /tmp/original ]; then
+  echo "Initial disk image already extracted for its kernel modules."
+else
+  (mkdir /tmp/original && cd /tmp/original && zcat /work/initramfs-virt | cpio -i)
+fi
 
 echo Copy the kernel modules to the new rootfs.
 cp -r /tmp/original/lib/modules /rootfs/lib/
