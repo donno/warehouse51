@@ -6,8 +6,34 @@
 ALPINE_VERSION=3.21
 ARCH=x86_64
 BASE_URI=https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION
-EXTRA_PACKAGES="nano tmux"
 ENABLE_NETWORKING=1
+FLAVOUR="$1"
+if [ "$FLAVOUR" = "--help" ]; then
+  echo "$0 - Create initial RAM filesystem for Alpine."
+  echo "usage: $0 [flavour]"
+  echo
+  echo "  flavour - minimal, plain, standard"
+  echo "            minimal is alpine-base broken down"
+  echo "            plain is alpine-base"
+  echo "            standard is plain with util-linux, grep, nano and tmux"
+  echo
+  exit 2
+fi
+
+MINIMAL_PACKAGES="alpine-baselayout alpine-conf alpine-release busybox busybox-mdev-openrc busybox-openrc busybox-suid musl-utils openrc"
+STANDARD_PACKAGES="alpine-base openrc"
+# The alpine-base package depends on openrc so that is potential redundant.
+
+if [ -z "$FLAVOUR" ]; then
+  echo "Defaulting to the "standard" variant."
+  FLAVOUR="standard"
+  EXTRA_PACKAGES="util-linux grep nano tmux"
+fi
+
+# Additional packages are needed for networking.
+if [ "$ENABLE_NETWORKING" -gt 0 ]; then
+  EXTRA_PACKAGES="$EXTRA_PACKAGES iptables iproute2 openssh"
+fi
 
 if [ ! -f vmlinuz-virt ]; then
   echo Fetching Kernel
@@ -15,9 +41,13 @@ if [ ! -f vmlinuz-virt ]; then
 fi
 
 echo Downloading base system with apk.
+echo "Packages: $STANDARD_PACKAGES $EXTRA_PACKAGES"
 
-apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add alpine-base openrc util-linux grep $EXTRA_PACKAGES
-
+if [ "$FLAVOUR" = "minimal" ]; then
+  apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $MINIMAL_PACKAGES $EXTRA_PACKAGES
+else
+  apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $STANDARD_PACKAGES $EXTRA_PACKAGES
+fi
 
 # Configure startup
 cp /rootfs/sbin/init /rootfs/init
