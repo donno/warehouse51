@@ -11,11 +11,13 @@ ENABLE_NETWORKING=1
 
 if [ ! -f vmlinuz-virt ]; then
   echo Fetching Kernel
-  wget $BASE_URI/releases/$ARCH/netboot/vmlinuz-virt
+  wget "$BASE_URI/releases/$ARCH/netboot/vmlinuz-virt"
 fi
 
 echo Downloading base system with apk.
-apk --arch x86_64 -X$BASE_URI/main/ --root /rootfs --initdb --no-cache --allow-untrusted add alpine-base openrc util-linux iptables iproute2 openssh grep $EXTRA_PACKAGES
+
+apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add alpine-base openrc util-linux grep $EXTRA_PACKAGES
+
 
 # Configure startup
 cp /rootfs/sbin/init /rootfs/init
@@ -46,9 +48,13 @@ if [ "$ENABLE_NETWORKING" -gt 0 ]; then
 
   # Set-up mdev as the device manager. If a full blown desktop environment
   # then it is not recommended. See https://wiki.alpinelinux.org/wiki/Mdev
-  chroot /rootfs /bin/sh -c 'rc-update add hwdrivers sysinit'
-  chroot /rootfs /bin/sh -c 'rc-update add mdev sysinit'
-  # apk add --quiet busybox-mdev-openrc
+  ln -sf /etc/init.d/hwdrivers /rootfs/etc/runlevels/sysinit/
+
+  # This needs: apk add busybox-mdev-openrc
+  ln -sf /etc/init.d/mdev /rootfs/etc/runlevels/sysinit/
+  # Alternate approach, but this requires that the host can run `rc-update`
+  # which could be for a different architecture.
+  #chroot /rootfs /bin/sh -c 'rc-update add mdev sysinit'
 
   # Configure networking
   # For details see: https://wiki.alpinelinux.org/wiki/Configure_Networking
