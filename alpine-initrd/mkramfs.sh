@@ -5,8 +5,8 @@
 
 ALPINE_VERSION=3.21
 ARCH=x86_64
-BASE_URI=https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION
-ENABLE_NETWORKING=1
+BASE_URI="https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION"
+ENABLE_NETWORKING=0
 FLAVOUR="$1"
 if [ "$FLAVOUR" = "--help" ]; then
   echo "$0 - Create initial RAM filesystem for Alpine."
@@ -14,7 +14,7 @@ if [ "$FLAVOUR" = "--help" ]; then
   echo
   echo "  flavour - minimal, plain, standard"
   echo "            minimal is alpine-base broken down"
-  echo "            plain is alpine-base"
+  echo "            plain [default] is alpine-base"
   echo "            standard is plain with util-linux, grep, nano and tmux"
   echo
   exit 2
@@ -25,15 +25,16 @@ STANDARD_PACKAGES="alpine-base openrc"
 # The alpine-base package depends on openrc so that is potential redundant.
 
 if [ -z "$FLAVOUR" ]; then
-  echo "Defaulting to the "standard" variant."
+  echo "Defaulting to the 'standard' variant."
   FLAVOUR="standard"
-  EXTRA_PACKAGES="util-linux grep nano tmux"
 fi
 
 # Additional packages are needed for networking.
 if [ "$ENABLE_NETWORKING" -gt 0 ]; then
-  EXTRA_PACKAGES="$EXTRA_PACKAGES iptables iproute2 openssh"
+  STANDARD_PACKAGES="$STANDARD_PACKAGES iptables iproute2 openssh openssh-server-pam"
 fi
+
+[ "$FLAVOUR" = "minimal" ] && PACKAGES="$MINIMAL_PACKAGES" || PACKAGES="$STANDARD_PACKAGES"
 
 if [ ! -f vmlinuz-virt ]; then
   echo Fetching Kernel
@@ -41,12 +42,21 @@ if [ ! -f vmlinuz-virt ]; then
 fi
 
 echo Downloading base system with apk.
-echo "Packages: $STANDARD_PACKAGES $EXTRA_PACKAGES"
+[ -f "packages.$FLAVOUR" ] \
+  && xargs -a "packages.$FLAVOUR" echo "Packages: $PACKAGES" \
+  || echo "Packages: $PACKAGES"
 
-if [ "$FLAVOUR" = "minimal" ]; then
-  apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $MINIMAL_PACKAGES $EXTRA_PACKAGES
+if [ -f "packages.$FLAVOUR" ]
+then
+  xargs -a "packages.$FLAVOUR" apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
+elif [ "$FLAVOUR" = "minimal" ] || [ "$FLAVOUR" = "plain" ]
+then
+  # This is done second to allow for packages.minimal and packages.plain to
+  # install additional packages if needed.
+  apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
 else
-  apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $STANDARD_PACKAGES $EXTRA_PACKAGES
+ echo "No package file found (packages.$FLAVOUR)."
+ exit 1
 fi
 
 # Configure startup
@@ -110,7 +120,7 @@ EOF
 fi
 
 # Create the initial file system image.
-(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > /work/initrdfs && cd - >/dev/null;)
+(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > /work/initrdfs && cd - >/dev/null) || exit 1
 
 echo Usage example
 echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd initrdfs

@@ -16,22 +16,23 @@ Features
 
 * Set-up user accounts with their authorised key. \
   See the section below for how to set it up.
-* Supports three flavours, specified via teh command line argument to the script.
+* Supports three flavours, specified via the command line argument to the script.
   * minimal - same as below without apk-tools
   * plain - alpine-base
   * standard - same as above plus util-linux, grep, nano and tmux
+* Support creating custom flavours which install extra packages. \
+  Create a package.<flavour-name> file with one package per line.
 
 When networking is enabled then iptables, iproute2 and openssh are installed.
-
 
 Missing features
 ----------------
 
 * No package mirror set-up for installing packages - Easily worked around by
-  running `setup-apkrepos`if needed.
+  running `setup-apkrepos` if needed.
 * Configurable hostname.
 * Reduce the packages installed.
-* Customise to include extra packages.
+* Customisable install script that is run within chroot for extra packages.
 * If there is no `apk` for the runner of the script then download and run the
   static binary instead.
 * Allow networking to be toggled off or on at runtime without editing the
