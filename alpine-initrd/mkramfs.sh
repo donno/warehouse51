@@ -116,10 +116,28 @@ iface lo inet loopback
 auto eth0
 iface eth0 inet dhcp
 EOF
-
 fi
 
+# Perform configuration, outside the rootfs.
+# This means if it is setting-up any additional services it can't run
+# "rc-update add" but instead must use "ln -sf"
+if [ -f "configure.outside.$FLAVOUR.sh" ]
+then
+  sh "configure.outside.$FLAVOUR.sh" /rootfs
+fi
+
+
+# Perform configuration, within the rootfs.
+# This means if it is setting-up any additional services it can't run
+# "rc-update add" but instead must use "ln -sf"
 # Create the initial file system image.
+if [ -f "configure.inside.$FLAVOUR.sh" ]
+then
+  cp "configure.inside.$FLAVOUR.sh" /rootfs
+  chroot /rootfs /bin/sh "/configure.inside.$FLAVOUR.sh"
+  rm "/rootfs/configure.inside.$FLAVOUR.sh"
+fi
+
 (cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > /work/initrdfs && cd - >/dev/null) || exit 1
 
 echo Usage example

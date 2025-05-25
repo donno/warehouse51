@@ -82,6 +82,21 @@ so for now they have made-up passwords.
 
 Also see https://arlimus.github.io/articles/usepam/
 
+### Flavours
+
+A new flavour is represented by up to three files:
+* Package file - lists each package to install, one per line
+* Configure script that runs outside the chroot [optional]
+* Configure script that runs inside the chroot [optional]
+
+To create a flavour, at a minimum create a package file.
+* `package.<flavour>`
+* `configure.outside.<flavour>.sh`
+* `configure.inside.<flavour>.sh`
+
+The configure script run outside will be passed the path to the root file
+system that is being built.
+
 Components
 ----------
 
