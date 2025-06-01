@@ -1,0 +1,53 @@
+
+[project]
+name = "alicevision_commands"
+version = "0.1.0"
+authors = [
+{ name = "Sean Donnellan", email = "darkdoonno@gmail.com" }
+]
+description = "Parse the commands from AliceVision."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent"
+]
+license = "MPL-2.0"
+dependencies = [
+  "psutil",
+  # meshroom.core.desc.node uses psutil instead of subprocess when running the
+  # scripts. The commands module could stub this package out.
+  "requests",
+  # Imported by aliceVision.SketchfabUpload
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.urls]
+AliceVision = "https://alicevision.org/"
+Meshroom = "https://alicevision.org/#meshroom"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "aliceVision/*.py",
+  "meshroom/*.py",
+  "commands.py",
+  "__init__.py",
+  "pyproject.toml",
+]
+exclude = [
+]
+
+[tool.hatch.build.targets.wheel]
+# Revisit this idea by reworking how these packages are imported so they
+# are loaded from within this package.
+packages = [".", "meshroom", "aliceVision"]
+exclude = [
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"." = "alicevision_commands/"
+# There is still going to be meshroom and aliceVision sub-folders here.
+
