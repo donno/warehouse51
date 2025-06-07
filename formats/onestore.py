@@ -18,6 +18,7 @@ import enum
 import io
 import logging
 import struct
+import typing
 import uuid
 
 
@@ -299,6 +300,9 @@ class FileNodeHeader:
         name, _ = file_node_id_to_type_name(self.file_node_id)
         return name
 
+    def is_file_node(self, file_node_class: type):
+        return self.file_node_id == file_node_class.FILE_NODE_ID
+
     @classmethod
     def from_reader(cls, reader):
         """Read the header from the reader.
@@ -336,13 +340,13 @@ class FileNodeHeader:
 class FileNode:
     """Represents a file node"""
 
-    header: FileNodeHeader
+    header: FileNodeHeader = dataclasses.field(repr=False)
     """The header that describes the information about the file node."""
 
     data: object
     """The reference to the data."""
 
-    children: list # These may be required to be a FIleNodeList.
+    children: list['FileNode'] = dataclasses.field(repr=False)
     """The child nodes."""
 
 
@@ -355,6 +359,9 @@ class ObjectSpaceManifestRootFND:
 
     See [MS-ONESTORE] Section 2.5.1
     """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x004
+    """The ID of this type of file node."""
 
     gosid: ExtendedGuid
     """The identity of the object space as specified in the object space
@@ -370,8 +377,30 @@ class ObjectSpaceManifestListReferenceFND:
     See [MS-ONESTORE] Section 2.5.2
     """
 
+    FILE_NODE_ID: typing.ClassVar[int] = 0x008
+    """The ID of this type of file node."""
+
     reference: FileChunkReference
     """"The reference to the object space manifest list."""
+
+    gosid: ExtendedGuid
+    """The identity of the object space as specified in the object space
+    manifest list.
+
+    See [MS-ONESTORE] Section 2.1.4 for object space.
+    """
+
+
+@dataclasses.dataclass
+class ObjectSpaceManifestListStartFND:
+    """The FileNode structure that specifies the beginning of an object space
+    manifest list.
+
+    See [MS-ONESTORE] Section 2.5.3
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x00C
+    """The ID of this type of file node."""
 
     gosid: ExtendedGuid
     """The identity of the object space as specified in the object space
@@ -390,7 +419,8 @@ class RevisionManifestListReferenceFND:
     See [MS-ONESTORE] Section 2.5.4
     """
 
-    FILE_NODE_ID = 0x010
+    FILE_NODE_ID: typing.ClassVar[int] = 0x010
+    """The ID of this type of file node."""
 
     # This requires the format from the FileNodeHeader to be able to read
     # the file node chunk reference contained within.
@@ -422,8 +452,16 @@ def read_file_node_chunk_reference(
     return FileChunkReference(stp, cb)
 
 
-def read_file_node(reader) -> FileNode:
+def read_file_node(reader, file_reader) -> FileNode:
     """Read a fileNode which is section 2.4.3 of the MS-ONESTORE format.
+
+    Parameters
+    ----------
+    reader
+        A readable binary stream containing the file chunk with the file nodes.
+    file_reader
+        This is the reader over hte entire file, this required for reading
+        file chunk references which are outside the current chunk.
 
     Raises
     ------
@@ -438,10 +476,12 @@ def read_file_node(reader) -> FileNode:
         # ignored.
         #
         # Often what this means is all the data is stored inline.
-        if header.file_node_id == 0x004:
+        if header.is_file_node(ObjectSpaceManifestRootFND):
             guid = ExtendedGuid(reader.read(20))
             return FileNode(header, ObjectSpaceManifestRootFND(guid), [])
-
+        if header.is_file_node(ObjectSpaceManifestListStartFND):
+            guid = ExtendedGuid(reader.read(20))
+            return FileNode(header, ObjectSpaceManifestRootFND(guid), [])
         message = f"Reading {header.type_name} is not yet implemented."
         raise NotImplementedError(message)
     elif header.base_type == 1:
@@ -461,19 +501,13 @@ def read_file_node(reader) -> FileNode:
             #assert header.size == 20 +size of reference. (that was 6 bytes.)
         else:
             data = reference
-            raise ValueError("Situation not encountered yet")
+            message = f"Situation not encountered yet: {header.type_name}"
+            raise ValueError(message)
 
         children = []
-        current_position = reader.tell()
-        # TODO: Confirm the reference is within the current fragment as
-        # reader is not hte full file. additionally, it is a view onto the file
-        # so any offsets from the start of the file will be wrong.
-
-        LOG.warning("NYI - Read the node list from %s", reference)
-        children.append(NotImplemented)
-        # These probably should be attached to the file node.
-        reader.seek(current_position)
-
+        current_position = file_reader.tell()
+        children.extend(read_file_List(file_reader, reference))
+        file_reader.seek(current_position)
         return FileNode(header, data, children)
 
     message = "The Base type for a file node is only expected to be 0, 1 or 2."
@@ -481,10 +515,15 @@ def read_file_node(reader) -> FileNode:
 
 
 def read_file_List(reader, reference: FileChunkReference):
+    logger = LOG.getChild("FileNodeListFragment")
+    logger.warning(
+        "Reading fragment at offset=%-8d, size=%d",
+        reference.offset,
+        reference.size,
+        )
     reader.seek(reference.offset)
     data = reader.read(reference.size)
 
-    logger = LOG.getChild("FileNodeListFragment")
     # This is a FileNodeListFragment (2.4.1) which is the sequence of file
     # nodes from a file node list and starts with FileNodeListHeader.
     #
@@ -535,7 +574,7 @@ def read_file_List(reader, reference: FileChunkReference):
         file_nodes = []
         while True:
             try:
-                file_nodes.append(read_file_node(chunk_reader))
+                file_nodes.append(read_file_node(chunk_reader, reader))
             except InvalidFileNode:
                 break
 
@@ -572,5 +611,7 @@ if __name__ == '__main__':
         file_nodes = read_file_List(reader, reference)
         for node in file_nodes:
             print(node)
-            if node.children:
-                print(node.children)
+            for child in node.children:
+                print(f"    {child}")
+                print(child.children)
+
