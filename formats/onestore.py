@@ -106,6 +106,16 @@ class FileChunkReference:
         """The offset to the end of the referenced data"""
         return self.stp + self.cb
 
+    @property
+    def is_nil(self) -> bool:
+        """A nil file chunk is a special value.
+
+        It specifies a file chunk reference where all bits of the stp field
+        are set to 1, and all bits of the cb field are set to zero.
+        """
+        # TODO: Check if the compressed version handles this.
+        return self.stp == 0xffffffffffffffff and self.cb == 0
+
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({self.stp}, {self.cb})'
 
@@ -351,6 +361,86 @@ class FileNode:
 
 
 @dataclasses.dataclass
+class GlobalIdTableStart2FND:
+    """Specifies the beginning of the global identification table.
+
+    This contains no data.
+
+    This is applicable to the .one file format.
+
+    There must be:
+     * Zero ore more FileNode with a value 0x024 (GlobalIdTableEntryFNDX)
+     * A FileNode with value 0x028 (GlobalIdTableEndFNDX).
+
+    See [MS-ONESTORE] Section 2.5.3
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x022
+    """The ID of this type of file node."""
+
+
+@dataclasses.dataclass
+class GlobalIdTableEndFNDX:
+    """Specifies the end of the global identification table.
+
+    This contains no data.
+
+    See [MS-ONESTORE] Section 2.1.3 and 2.4.3.
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x028
+    """The ID of this type of file node."""
+
+
+@dataclasses.dataclass
+class GlobalIdTableEntryFNDX:
+    """"Specifies an entry in the current global identification table.
+
+    See [MS-ONESTORE] Section 2.5.10
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x024
+    """The ID of this type of file node."""
+
+    index: int
+    """AN unsigned integer that specifies the index of the entry.
+
+    Constraints:
+    - Must be less than 0xFFFFFF
+    - Must be unique relative to other indices in this table and those of the
+      other three tables (FNDX, 2FNDX and 3FNDX).
+    """
+
+    guid: Guid
+    """A GUID as specified by [MDS-DTYP]
+
+    Constraints
+    - Must not be all zeros
+    - Must be unique relative to other GUID fields in this global
+      identification table.
+    """
+
+
+@dataclasses.dataclass
+class RootObjectReference3FND:
+    """"Specifies the root object of a revision for a particular root role.
+
+    See [MS-ONESTORE] Section 2.5.16
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x05A
+    """The ID of this type of file node."""
+
+    object_id_root: ExtendedGuid
+    """Specifies the identity of the root object of the containing revision for
+    the role specified by the RootRole field.
+    """
+
+    root_role: int
+    """An unsigned integer that specifies the role of the root object."""
+
+
+@dataclasses.dataclass
 class ObjectSpaceManifestRootFND:
     """The FileNode structure for the root object space in a revision store file.
 
@@ -410,10 +500,11 @@ class ObjectSpaceManifestListStartFND:
     """
 
 
+@dataclasses.dataclass
 class RevisionManifestListReferenceFND:
     """The FileNode structure for the reference to a revision manifest list.
 
-    # This contains a file node chunk reference which specifies the location
+    This contains a file node chunk reference which specifies the location
     and size of the first FileNodeListFragment in the revision manifest list.
 
     See [MS-ONESTORE] Section 2.5.4
@@ -422,8 +513,373 @@ class RevisionManifestListReferenceFND:
     FILE_NODE_ID: typing.ClassVar[int] = 0x010
     """The ID of this type of file node."""
 
-    # This requires the format from the FileNodeHeader to be able to read
-    # the file node chunk reference contained within.
+    reference: FileChunkReference
+    """"The reference to the object space manifest list."""
+
+
+@dataclasses.dataclass
+class RevisionManifestListStartFND:
+    """The FileNode structure for the reference to a revision manifest list.
+
+    See [MS-ONESTORE] Section 2.5.5
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x014
+    """The ID of this type of file node."""
+
+    reference: FileChunkReference
+    """"The reference to the object space manifest list."""
+
+    # It has 4-bytes which is instance_count but it must be ignored.
+
+# TODO: Missing 2.5.6 (RevisionManifestStart4FND)
+
+@dataclasses.dataclass
+class RevisionManifestStart6FND:
+    """The FileNode structure that specifies the start of the revision manifest
+    for the default context of an object space.
+
+    See [MS-ONESTORE] Section 2.5.7
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x01E
+    """The ID of this type of file node."""
+
+    revision_id: ExtendedGuid
+    """Specifies the identity of this revision.
+
+    It must be unique amongst all the other revision field of the other
+    manifest start nodes"""
+
+    revision_id_dependent: ExtendedGuid
+    """Specifies the identity of dependency revision.
+
+    If this is all zero then there is no dependency revision."""
+
+    revision_role: int
+    """Specifies the revision role that labels this revision."""
+
+    odcs_default: int
+    """Specifies whether the data contained by this revision manifest is
+    encrypted.
+
+    It must be either 0 (no encryption) or 2 (encrypted).
+    """
+    # TODO: enum?
+
+
+@dataclasses.dataclass
+class ObjectInfoDependencyOverridesFND:
+    """The FileNode structure that specifies updated reference counts for objects
+
+    The override data is specified by the ref field if the value of the
+    reference field is not "fcrNil" ([MS-ONESTORE] section 2.2.4); otherwise,
+    the override data is specified by the data field
+
+    The total size of the data field, in bytes, must be less than 1024;
+    otherwise, the override data must be in the location referenced by the
+    reference field.
+
+    See [MS-ONESTORE] Section 2.5.20
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x084
+    """The ID of this type of file node."""
+
+    reference: FileChunkReference
+    """Specifies the location of an ObjectInfoDependencyOverrideData structure.
+
+    If the value of this is not the nil reference value (the stp field is set
+    to 1 and cb field are set to zero).
+    """
+
+    data: bytes | None
+    """An optional ObjectInfoDependencyOverrideData structure.
+
+    This specifies the updated reference counts for objects.
+
+    It must exist if the value of reference field is not nil.
+    """
+
+
+@dataclasses.dataclass
+class ObjectDeclaration2LargeRefCountFND:
+    """The FileNode structure that specifies an object with a reference count.
+
+    If this object is revised, all declarations of this object must specify
+    identical data.
+
+    See [MS-ONESTORE] Section 2.5.26
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0A5
+    """The ID of this type of file node."""
+
+    blob_reference: FileChunkReference
+    """Specifies a reference to an ObjectSpaceObjectPropSet structure."""
+
+    body: 'ObjectDeclaration2Body'
+    """Specifies the identity and other attributes of this object."""
+
+    reference_count: int
+    """An unsigned integer that specifies the reference count for this object.
+
+    This is 4-bytes which is what makes it different to
+    ObjectDeclaration2RefCountFND.
+    """
+
+
+@dataclasses.dataclass
+class ReadOnlyObjectDeclaration2RefCountFND:
+    """The FileNode structure that specifies an object with a reference count.
+
+    If this object is revised, all declarations of this object must specify
+    identical data.
+
+    See [MS-ONESTORE] Section 2.5.29
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0C4
+    """The ID of this type of file node."""
+
+    base: 'ObjectDeclaration2RefCountFND'
+    """Specifies the identity and other attributes of this object.
+
+    The values of is_property_set and is_read_only in the JCID of the body must
+    be true.
+    """
+
+    md5_hash: int
+    """An unsigned integer that specifies an MD5 checksum of the data
+    referenced by the base.BlobRef field.
+
+    See [RFC1321] for the checksum.
+
+    If referenced data is encrypted it must be decrypted and padded with zeros
+    to 8-byte boundary before computing the checksum.
+
+    This is 16-bytes long.
+    """
+
+
+@dataclasses.dataclass
+class ReadOnlyObjectDeclaration2LargeRefCountFND:
+    """The FileNode structure that specifies an object with a reference count.
+
+    If this object is revised, all declarations of this object must specify
+    identical data.
+
+    See [MS-ONESTORE] Section 2.5.30
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0C5
+    """The ID of this type of file node."""
+
+    base: 'ObjectDeclaration2LargeRefCountFND '
+    """Specifies the identity and other attributes of this object.
+
+    The values of is_property_set and is_read_only in the JCID of the body must
+    be true.
+    """
+
+    md5_hash: int
+    """An unsigned integer that specifies an MD5 checksum of the data
+    referenced by the base.BlobRef field.
+
+    See [RFC1321] for the checksum.
+
+    If referenced data is encrypted it must be decrypted and padded with zeros
+    to 8-byte boundary before computing the checksum.
+
+    This is 16-bytes long.
+    """
+
+@dataclasses.dataclass
+class ObjectGroupListReferenceFND:
+    """The FileNode structure that specifies a reference to an object group.
+
+    The FileNodeId must be 0x0B0.
+
+    See [MS-ONESTORE] Section 2.5.31
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0B0
+    """The ID of this type of file node."""
+
+    reference: FileChunkReference
+    """Specifies the location to the first FileNodeListFragment in the file node
+    list for the object group."""
+
+    object_group_id: ExtendedGuid
+    """Specifies the identity of the object group that the reference field
+    points to.
+
+    It must be the same value as the object_id field in the
+    ObjectGroupStartFND structure.
+    """
+
+
+@dataclasses.dataclass
+class ObjectGroupStartFND:
+    """The FileNode structure that specifies a start of an object group.
+
+    See [MS-ONESTORE] Section 2.5.32
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0B4
+    """The ID of this type of file node."""
+
+    object_id: ExtendedGuid
+    """Specifies the identity of the object group."""
+
+
+@dataclasses.dataclass
+class DataSignatureGroupDefinitionFND:
+    """The FileNode structure that specifies a signature for data of objects
+    declared by the FileNode structures following this FileNode structure.
+
+    # The signature's effect terminates when a FileNode structure ID equals to
+    one of the following:
+    - 0x0B8 (ObjectGroupEndFND structure, section 2.4.3)
+    - 0x08C (DataSignatureGroupDefinitionFND structure, section 2.5.33)
+    - 0x01C (RevisionManifestEndFND structure, section 2.4.3)
+
+    See [MS-ONESTORE] Section 2.5.33
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x08C
+    """The ID of this type of file node."""
+
+    signature: ExtendedGuid
+    """Specifies the signature"""
+
+
+class CompactID:
+    """The CompactID structure is a combination of two unsigned integers.
+
+    A CompactID structure together with a global identification table specifies
+    an ExtendedGUID structure
+    """
+
+    n: int
+    """An unsigned integer that specifies the value of the ExtendedGUID.n field"""
+
+    guid_index: int
+    """An unsigned integer that specifies the index in the global
+    identification table.
+
+    The GUID that corresponds to this index provides the value for the
+    ExtendedGUID.guid field.
+    """
+
+
+class JCID:
+    """Specifies the type of object and the type of data the object contains.
+
+    A JCID structure can be considered to be an unsigned integer of size four
+    bytes as specified by property set and file data object.
+
+    This is a 32-bit unsigned integer.
+    """
+
+    index: int
+    """An unsigned integer that specified the type of object."""
+
+    is_binary: bool
+    """Specifies whether the object contains encryption data transmitted over
+    the File Synchronization via SOAP over HTTP Protocol as specified in
+    [MS-FSSHTTP].
+    """
+
+    is_property_set: bool
+    """Specifies whether the object contains a property set."""
+
+    is_graph_node: bool
+    """Undefined and must be ignored"""
+
+    is_file_data: bool
+    """Specifies whether the object is a file data object.
+
+    If this value is True, then the value of all the previous booleans must be
+    false as well as is_read_only that follows.
+    """
+
+    is_read_only: bool
+    """Specifies whether the object's data MUST NOT be changed when the object
+    is revised.
+    """
+
+    reserved: int
+    """11-bits that are reserved and must be zero and be ignored."""
+
+
+@dataclasses.dataclass
+class ObjectDeclaration2Body:
+    """Specifies the identity of an object and the type of data the object contains.
+
+    This is 9 bytes all up.
+
+    See [MS-ONESTORE] Section 2.6.16.
+    """
+    object_id: CompactID
+    """CompactID that specifies the identity of this object"""
+
+    type_id: int
+    """A JCID that specifies the type of data this object contains."""
+
+    has_object_id_references: bool
+    """Specifies whether this object contains references to other objects."""
+
+    has_object_space_references: bool
+    """Specifies whether this object contains references to object spaces or
+    contexts.
+    """
+
+    reserved: int
+    """Reserved field that is 6 bits and must be zero and is to be ignored."""
+
+    @classmethod
+    def from_reader(cls, reader) -> typing.Self:
+        """Construct this class from the bytes read from reader."""
+        raw_object_id = reader.read(4)
+        raw_type_id = reader.read(4)
+        flags = int.from_bytes(reader.read(1))
+
+        if not hasattr(cls, '_warned'):
+            LOG.warning(
+                "Conversion of to CompactID and JCID NYI - this message will "
+                "show once"
+            )
+            cls._warned = True
+
+        return cls(
+            raw_object_id,
+            raw_type_id,
+            flags & 1 == 1,
+            flags & 2 == 2,
+            flags >> 2,
+        )
+
+
+@dataclasses.dataclass
+class ObjectDeclaration2RefCountFND:
+    """Specifies an object (section 2.1.5) with a reference count.
+
+    See [MS-ONESTORE] Section 2.5.35
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x0A4
+    """The ID of this type of file node."""
+
+    blob_reference: FileChunkReference
+    """Specifies a reference to an ObjectSpaceObjectPropSet structure."""
+
+    body: ObjectDeclaration2Body
+    """Specifies the identity and other attributes of this object."""
+
+    reference_count: int
+    """An unsigned integer (1 byte) that specifies the reference count for this object."""
+
 
 
 def read_file_node_chunk_reference(
@@ -460,7 +916,7 @@ def read_file_node(reader, file_reader) -> FileNode:
     reader
         A readable binary stream containing the file chunk with the file nodes.
     file_reader
-        This is the reader over hte entire file, this required for reading
+        This is the reader over the entire file, this required for reading
         file chunk references which are outside the current chunk.
 
     Raises
@@ -481,7 +937,56 @@ def read_file_node(reader, file_reader) -> FileNode:
             return FileNode(header, ObjectSpaceManifestRootFND(guid), [])
         if header.is_file_node(ObjectSpaceManifestListStartFND):
             guid = ExtendedGuid(reader.read(20))
-            return FileNode(header, ObjectSpaceManifestRootFND(guid), [])
+            return FileNode(header, ObjectSpaceManifestListStartFND(guid), [])
+        if header.is_file_node(RevisionManifestListStartFND):
+            guid = ExtendedGuid(reader.read(20))
+            instance_count = reader.read(4)
+            _ = instance_count
+            return FileNode(header, RevisionManifestListStartFND(guid), [])
+        if header.is_file_node(RevisionManifestStart6FND):
+            guid = ExtendedGuid(reader.read(20))
+            dependant_guid = ExtendedGuid(reader.read(20))
+            revision_role = int.from_bytes(reader.read(4), byteorder='little')
+            odcs_default = int.from_bytes(reader.read(2), byteorder='little')
+            return FileNode(
+                header,
+                RevisionManifestStart6FND(
+                    guid, dependant_guid, revision_role, odcs_default,
+                ),
+                [],
+            )
+        if header.is_file_node(ObjectGroupStartFND):
+            guid = ExtendedGuid(reader.read(20))
+            return FileNode(header, ObjectGroupStartFND(guid), [])
+
+        if header.is_file_node(GlobalIdTableStart2FND):
+            return FileNode(header, GlobalIdTableStart2FND(), [])
+
+        if header.is_file_node(GlobalIdTableEndFNDX):
+            return FileNode(header, GlobalIdTableEndFNDX(), [])
+
+        if header.is_file_node(GlobalIdTableEntryFNDX):
+            index = int.from_bytes(reader.read(4), byteorder='little')
+            guid = Guid(reader.read(16))
+            return FileNode(header, GlobalIdTableEntryFNDX(index, guid), [])
+
+        if header.is_file_node(RootObjectReference3FND):
+            guid = ExtendedGuid(reader.read(20))
+            root_role = int.from_bytes(reader.read(4), byteorder='little')
+            return FileNode(header, RootObjectReference3FND(guid, root_role), [])
+
+        if header.is_file_node(DataSignatureGroupDefinitionFND):
+            guid = ExtendedGuid(reader.read(20))
+            return FileNode(header, DataSignatureGroupDefinitionFND(guid), [])
+
+        if header.file_node_id == 0x0B8: # ObjectGroupEndFND
+            # Specifies the end of an object group and contain no data.
+            return FileNode(header, None, [])
+
+        if header.file_node_id == 0x01C: # RevisionManifestEndFND
+            # Specifies the end of an revision manifest and contain no data.
+            return FileNode(header, None, [])
+
         message = f"Reading {header.type_name} is not yet implemented."
         raise NotImplementedError(message)
     elif header.base_type == 1:
@@ -489,7 +994,37 @@ def read_file_node(reader, file_reader) -> FileNode:
         # The first field of "fnd" (which follows the header) must be
         # the chunk reference.
         reference = read_file_node_chunk_reference(reader, header)
-        return FileNode(header, reference, [])
+
+        if header.is_file_node(ObjectDeclaration2RefCountFND):
+            body = ObjectDeclaration2Body.from_reader(reader)
+            reference_count = int.from_bytes(reader.read(1))
+            data = ObjectDeclaration2RefCountFND(
+                reference, body, reference_count)
+        elif header.is_file_node(ObjectInfoDependencyOverridesFND):
+            if reference.is_nil:
+                # The data is stored inline.
+                raw_data = reader.read(12)
+                LOG.warning("The data is not decoded for %s", header.type_name)
+                data = ObjectInfoDependencyOverridesFND(reference, raw_data)
+            else:
+                data = ObjectInfoDependencyOverridesFND(reference, None)
+        elif header.is_file_node(ReadOnlyObjectDeclaration2RefCountFND):
+            body = ObjectDeclaration2Body.from_reader(reader)
+            reference_count = int.from_bytes(reader.read(1))
+            base = ObjectDeclaration2RefCountFND(reference, body, reference_count)
+            md5_hash = reader.read(16)
+            data = ReadOnlyObjectDeclaration2RefCountFND(base, md5_hash)
+        elif header.is_file_node(ReadOnlyObjectDeclaration2LargeRefCountFND):
+            body = ObjectDeclaration2Body.from_reader(reader)
+            reference_count = int.from_bytes(reader.read(4), byteorder='little')
+            base = ObjectDeclaration2LargeRefCountFND(
+                reference, body, reference_count)
+            md5_hash = reader.read(16)
+            data = ReadOnlyObjectDeclaration2LargeRefCountFND(base, md5_hash)
+        else:
+            message = f"Reading {header.type_name} is not yet implemented."
+            raise NotImplementedError(message)
+        return FileNode(header, data, [])
     elif header.base_type == 2:
         # Contains reference to a file node list
         # First field in "fnd" (which follows the header) must be a file
@@ -499,6 +1034,11 @@ def read_file_node(reader, file_reader) -> FileNode:
             guid = ExtendedGuid(reader.read(20))
             data = ObjectSpaceManifestListReferenceFND(reference, guid)
             #assert header.size == 20 +size of reference. (that was 6 bytes.)
+        elif header.is_file_node(RevisionManifestListReferenceFND):
+            data = RevisionManifestListReferenceFND(reference)
+        elif header.is_file_node(ObjectGroupListReferenceFND):
+            object_group_id = ExtendedGuid(reader.read(20))
+            data = ObjectGroupListReferenceFND(reference, object_group_id)
         else:
             data = reference
             message = f"Situation not encountered yet: {header.type_name}"
@@ -564,7 +1104,8 @@ def read_file_List(reader, reference: FileChunkReference):
     # fragment_sequence_count must be 0 for the first fragment in a file node
     # list and the rest must be sequential
     logger.debug("Fragment Sequence Count: %d", fragment_sequence_count)
-    logger.debug("Next fragment: %s", next_fragment)
+    logger.debug("Next fragment: %s",
+                 next_fragment if next_fragment.size else "None")
 
     # This is a stream of file nodes and is terminated when a certain condition
     # is met.
@@ -579,7 +1120,7 @@ def read_file_List(reader, reference: FileChunkReference):
                 break
 
         if next_fragment.size > 0:
-            raise NotImplementedError("read teh next fragment.")
+            raise NotImplementedError("read the next fragment.")
         return file_nodes
 
 
