@@ -12,7 +12,7 @@ Supplementary modules/scripts:
   at the before the first votes are counted such that media companies can load
   it into their systems. that media companies can load it into their systems.
 * referendum - Helps with working with media feed data for the 2023 Referendum
-  in Australia. This did not quite use teh standard EML (Election Markup
+  in Australia. This did not quite use the standard EML (Election Markup
   Language).
 * geometry - At this stage mainly provides a module for [downloading][2] the
   shapefiles for the electoral divisions of each state and territory.
