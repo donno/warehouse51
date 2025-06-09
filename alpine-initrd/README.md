@@ -38,6 +38,18 @@ Missing features
 * Allow networking to be toggled off or on at runtime without editing the
   script.
 
+Known Issues
+------------
+
+### Missing Packages
+
+For setup-alpine
+- It expects "chrony" to be available to use that as NTP client.
+  The Workaround is to use busybox.
+- Setting up openssh also fails while it is already installed in the networking
+  image, it needs the package to install.
+
+
 How it Works
 ------------
 
