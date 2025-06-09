@@ -310,7 +310,10 @@ class FileNodeHeader:
         name, _ = file_node_id_to_type_name(self.file_node_id)
         return name
 
-    def is_file_node(self, file_node_class: type):
+    def is_file_node(self, file_node_class: type | tuple[type]):
+        if isinstance(file_node_class, tuple):
+            return any(self.file_node_id == node_class.FILE_NODE_ID
+                       for node_class in file_node_class)
         return self.file_node_id == file_node_class.FILE_NODE_ID
 
     @classmethod
@@ -332,7 +335,7 @@ class FileNodeHeader:
             If this is not a file node (the 432-bit value is all zeros).
         """
         raw_header, = struct.unpack('<I', reader.read(4))
-        if raw_header == 0:
+        if raw_header == 0 or raw_header & 0x3FF == 0:
             raise InvalidFileNode("Not a a file node.")
         if raw_header & 0x3FF == 255:
             raise InvalidFileNode("Not a a file node.")
@@ -441,6 +444,49 @@ class RootObjectReference3FND:
 
 
 @dataclasses.dataclass
+class RevisionRoleDeclarationFND:
+    """"Specifies a new additional revision role value to associate with a
+    revision.
+
+    The revision role label is in the default context.
+
+    See [MS-ONESTORE] Section 2.5.17
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x05C
+    """The ID of this type of file node."""
+
+    revision_id: ExtendedGuid
+    """Specifies the identity of the revision to add the revision role to.
+
+    It must match the value of the revision_id field of the preceding
+    RevisionManifestStart4FND, RevisionManifestStart6FND or
+    RevisionManifestStart7FND of one of preceding revision manifests
+    """
+
+    root_role: int
+    """Specifies a revision role for the default context.."""
+
+
+@dataclasses.dataclass
+class RevisionRoleAndContextDeclarationFND:
+    """"Specifies a new additional revision role and context pair to associate
+    with a revision.
+
+    See [MS-ONESTORE] Section 2.5.18
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x05D
+    """The ID of this type of file node."""
+
+    base: RevisionRoleDeclarationFND
+    """Specifies the revision and revision role."""
+
+    context_id: ExtendedGuid
+    """Specifies the context that labels this revision."""
+
+
+@dataclasses.dataclass
 class ObjectSpaceManifestRootFND:
     """The FileNode structure for the root object space in a revision store file.
 
@@ -459,6 +505,7 @@ class ObjectSpaceManifestRootFND:
 
     See [MS-ONESTORE] Section 2.1.4 for object space.
     """
+
 
 @dataclasses.dataclass
 class ObjectSpaceManifestListReferenceFND:
@@ -532,7 +579,42 @@ class RevisionManifestListStartFND:
 
     # It has 4-bytes which is instance_count but it must be ignored.
 
-# TODO: Missing 2.5.6 (RevisionManifestStart4FND)
+
+@dataclasses.dataclass
+class RevisionManifestStart4FND:
+    """The FileNode structure that specifies the beginning of a revision
+    manifest.
+
+    This revision manifest applies to the default context of the containing
+    object space.
+
+    See [MS-ONESTORE] Section 2.5.6
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x01B
+    """The ID of this type of file node."""
+
+    revision_id: ExtendedGuid
+    """"The reference to the object space manifest list."""
+
+    revision_id_dependent: ExtendedGuid
+    """Specifies the identity of dependency revision.
+
+    If this is all zero then there is no dependency revision."""
+
+    creation_time: int
+    """This is 8-btytes and is undefined and must be ignored."""
+
+    revision_role: int
+    """Specifies the revision role that labels this revision."""
+
+    odcs_default: int
+    """Specifies whether the data contained by this revision manifest is
+    encrypted.
+
+    This must be 0 and MUST be ignored.
+    """
+
 
 @dataclasses.dataclass
 class RevisionManifestStart6FND:
@@ -566,6 +648,24 @@ class RevisionManifestStart6FND:
     It must be either 0 (no encryption) or 2 (encrypted).
     """
     # TODO: enum?
+
+
+@dataclasses.dataclass
+class RevisionManifestStart7FND:
+    """The FileNode structure that specifies the beginning of a revision manifest
+    for the default context of an object space.
+
+    See [MS-ONESTORE] Section 2.5.8
+    """
+
+    FILE_NODE_ID: typing.ClassVar[int] = 0x01F
+    """The ID of this type of file node."""
+
+    base: RevisionManifestStart6FND
+    """Specifies the identity and other attributes of this revision."""
+
+    context_id: ExtendedGuid
+    """Specifies the context that labels this revision."""
 
 
 @dataclasses.dataclass
@@ -943,18 +1043,25 @@ def read_file_node(reader, file_reader) -> FileNode:
             instance_count = reader.read(4)
             _ = instance_count
             return FileNode(header, RevisionManifestListStartFND(guid), [])
-        if header.is_file_node(RevisionManifestStart6FND):
+        if header.is_file_node((RevisionManifestStart6FND,
+                                RevisionManifestStart7FND)):
             guid = ExtendedGuid(reader.read(20))
             dependant_guid = ExtendedGuid(reader.read(20))
             revision_role = int.from_bytes(reader.read(4), byteorder='little')
             odcs_default = int.from_bytes(reader.read(2), byteorder='little')
-            return FileNode(
-                header,
-                RevisionManifestStart6FND(
-                    guid, dependant_guid, revision_role, odcs_default,
+            manifest = RevisionManifestStart6FND(
+                guid, dependant_guid, revision_role, odcs_default,
                 ),
-                [],
-            )
+
+            if header.is_file_node(RevisionManifestStart7FND):
+                context_id = ExtendedGuid(reader.read(20))
+                return FileNode(
+                    header,
+                    RevisionManifestStart7FND(manifest, context_id),
+                    [],
+                )
+            return FileNode(header, manifest, [])
+
         if header.is_file_node(ObjectGroupStartFND):
             guid = ExtendedGuid(reader.read(20))
             return FileNode(header, ObjectGroupStartFND(guid), [])
@@ -978,6 +1085,33 @@ def read_file_node(reader, file_reader) -> FileNode:
         if header.is_file_node(DataSignatureGroupDefinitionFND):
             guid = ExtendedGuid(reader.read(20))
             return FileNode(header, DataSignatureGroupDefinitionFND(guid), [])
+
+        if header.is_file_node(RevisionManifestStart7FND):
+            guid = ExtendedGuid(reader.read(20))
+            dependant_guid = ExtendedGuid(reader.read(20))
+            revision_role = int.from_bytes(reader.read(4), byteorder='little')
+            odcs_default = int.from_bytes(reader.read(2), byteorder='little')
+            return FileNode(
+                header,
+                RevisionManifestStart6FND(
+                    guid, dependant_guid, revision_role, odcs_default,
+                ),
+                [],
+            )
+
+        if header.is_file_node((RevisionRoleDeclarationFND,
+                                RevisionRoleAndContextDeclarationFND)):
+            guid = ExtendedGuid(reader.read(20))
+            revision_role = int.from_bytes(reader.read(4), byteorder='little')
+            role = RevisionRoleDeclarationFND(guid, revision_role)
+            if header.is_file_node(RevisionRoleAndContextDeclarationFND):
+                context_id = ExtendedGuid(reader.read(20))
+                return FileNode(
+                    header,
+                    RevisionRoleAndContextDeclarationFND(role, context_id),
+                    [],
+                )
+            return FileNode(header, role, [])
 
         if header.file_node_id == 0x0B8: # ObjectGroupEndFND
             # Specifies the end of an object group and contain no data.
@@ -1054,9 +1188,12 @@ def read_file_node(reader, file_reader) -> FileNode:
     raise ValueError(message)
 
 
-def read_file_List(reader, reference: FileChunkReference):
+def read_fragment(
+        reader,
+        reference: FileChunkReference,
+        ) -> tuple[list, FileChunkReference | None]:
     logger = LOG.getChild("FileNodeListFragment")
-    logger.warning(
+    logger.info(
         "Reading fragment at offset=%-8d, size=%d",
         reference.offset,
         reference.size,
@@ -1096,7 +1233,7 @@ def read_file_List(reader, reference: FileChunkReference):
     next_offset, next_size, footer = struct.unpack_from("<QIQ", data[-20:])
     if footer != 0x8BC215C38233BA4B:
         raise ValueError(
-            'The FileNodeListFragment did not end with teh magic number for '
+            'The FileNodeListFragment did not end with the magic number for '
             'the footer.')
 
     next_fragment = FileChunkReference(next_offset, next_size)
@@ -1119,9 +1256,18 @@ def read_file_List(reader, reference: FileChunkReference):
             except InvalidFileNode:
                 break
 
-        if next_fragment.size > 0:
-            raise NotImplementedError("read the next fragment.")
-        return file_nodes
+        next_fragment = next_fragment if next_fragment.size > 0 else None
+        return file_nodes, next_fragment
+
+
+def read_file_List(reader, reference: FileChunkReference) -> list:
+    file_nodes = []
+    next_fragment = reference
+    while next_fragment:
+        nodes_from_fragment, next_fragment = read_fragment(reader,
+                                                           next_fragment)
+        file_nodes.extend(nodes_from_fragment)
+    return file_nodes
 
 
 if __name__ == '__main__':
@@ -1154,5 +1300,8 @@ if __name__ == '__main__':
             print(node)
             for child in node.children:
                 print(f"    {child}")
-                print(child.children)
-
+                for c in child.children:
+                    if c.children:
+                        print(f"        {c} with {len(c.children)} children")
+                    else:
+                        print(f"        {c}")
