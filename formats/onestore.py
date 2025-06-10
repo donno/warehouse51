@@ -62,6 +62,10 @@ class Guid:
         hex = self.raw.hex().upper()
         return f'{{{hex[:8]}-{hex[8:12]}-{hex[12:16]}-{hex[16:]}}}'
 
+    @classmethod
+    def from_uuid(cls, uuid_value: uuid.UUID) -> typing.Self:
+        return cls(uuid_value.bytes)
+
 
 class ExtendedGuid:
     """The combination of a GUID and an unsigned integer.
@@ -77,6 +81,33 @@ class ExtendedGuid:
         return f"{{{self.guid}}}, n={self.n}"
 
 
+@dataclasses.dataclass
+class CompactID:
+    """The CompactID structure is a combination of two unsigned integers.
+
+    A CompactID structure together with a global identification table specifies
+    an ExtendedGUID structure
+
+    See [MS-ONESTORE] Section 2.2.2.
+    """
+
+    n: int
+    """An unsigned integer that specifies the value of the ExtendedGUID.n field.
+
+    This is 8-bits
+    """
+
+    guid_index: int
+    """An unsigned integer that specifies the index in the global
+    identification table.
+
+    The GUID that corresponds to this index provides the value for the
+    ExtendedGUID.guid field.
+
+    This is 24-bits.
+    """
+
+
 class FileChunkReference:
     """File chunk reference.
 
@@ -86,6 +117,8 @@ class FileChunkReference:
     referenced data in the file.
     cb (4 bytes): An unsigned integer that specifies the size, in bytes, of the
     referenced data.
+
+    See [MS-ONESTORE] Section 2.2.4.
     """
     def __init__(self, stp, cb):
         self.stp = stp
@@ -122,9 +155,17 @@ class FileChunkReference:
     def __repr__(self):
         return f"FileChunkReference({self.stp}, {self.cb})"
 
+    def read_chunk(self, reader) -> io.BytesIO:
+        """Read the file chunk specified by this reference."""
+        reader.seek(self.offset)
+        return io.BytesIO(reader.read(self.size))
+
 
 class FileChunkReference64x32(FileChunkReference):
-    """File chunk reference that is 64-bits and 32-bits."""
+    """File chunk reference that is 64-bits and 32-bits.
+
+    See [MS-ONESTORE] Section 2.2.4.4.
+    """
 
     def __init__(self, raw_bytes):
         self.raw = raw_bytes
@@ -854,22 +895,245 @@ class DataSignatureGroupDefinitionFND:
     """Specifies the signature"""
 
 
-class CompactID:
-    """The CompactID structure is a combination of two unsigned integers.
+# The classes that follow are from 2.6 Other Structures in [MS-ONESTORE]
 
-    A CompactID structure together with a global identification table specifies
-    an ExtendedGUID structure
+@dataclasses.dataclass
+class PropertyID:
+    """Specifies the format of a property set
+
+    See [MS-ONESTORE] Section 2.6.6.
     """
 
-    n: int
-    """An unsigned integer that specifies the value of the ExtendedGUID.n field"""
+    id: int
+    """An unsigned integer that specifies the identity of this property.
 
-    guid_index: int
-    """An unsigned integer that specifies the index in the global
-    identification table.
+    The meanings of the id field values are specified in [MS-ONE] section
+    2.1.12.
 
-    The GUID that corresponds to this index provides the value for the
-    ExtendedGUID.guid field.
+    This is a 26-bit integer.
+    """
+
+    type: int
+    """An unsigned integer that specifies the property type and the size and
+    location of the data for this property.
+
+    There are 5-bits that make this up.
+
+    There is a list of values this can be."""
+    # TODO: Look at adding the enumeration for this.
+
+    special: bool
+    """TA bit that specifies the value of a Boolean property.
+
+    Must be false if the type is not 0x2."""
+
+
+@dataclasses.dataclass
+class PropertySet:
+    """Specifies the format of a property set
+
+    See [MS-ONESTORE] Section 2.6.7.
+    """
+
+    property_count: int
+    """An unsigned integer that specifies the number of properties in this set.
+
+    This is 2-bytes.
+    """
+
+    properties: list[PropertyID]
+    """An array of property IDs where the length is equal to property_count."""
+
+
+@dataclasses.dataclass
+class ObjectSpaceObjectStreamHeader:
+    """Specifies the number of objects (see section 2.1.5) in a stream and
+    whether there are more streams following the stream that contains this
+    ObjectSpaceObjectStreamHeader structure.
+
+    See [MS-ONESTORE] Section 2.6.5
+    """
+
+    count: int
+    """An unsigned integer that specifies the number of CompactID structures
+    in the stream that contains this ObjectSpaceObjectStreamHeader structure.
+
+    This is 24-bit.
+    """
+
+    reserved: int
+    """6-bits and all zero and be ignored."""
+
+    object_space_ids_not_present: bool
+    """A bit that specifies whether the ObjectSpaceObjectPropSet structure
+    contains any additional streams of data following this stream of data.
+    """
+
+    extended_streams_present: bool
+    """A bit that specifies whether the ObjectSpaceObjectPropSet structure does
+    not contain OSIDs or ContextIDs fields."""
+
+
+@dataclasses.dataclass
+class ObjectSpaceObjectStreamOfOIDs:
+    """Specifies the count and list of objects referenced by an
+    ObjectSpaceObjectPropSet structure
+
+    See [MS-ONESTORE] Section 2.6.2
+    """
+
+    header: ObjectSpaceObjectStreamHeader
+    """Specifies the number of elements in the body field and whether the
+    property set contains the object_space_ids fields and context_ids."""
+
+    body: list[CompactID]
+    """An array of compand IDS where each element in the array
+    specifies the identity of an object.
+
+    The number of elements in this array is equal to the count value in the
+    header."""
+
+
+@dataclasses.dataclass
+class ObjectSpaceObjectPropSet:
+    """Specifies the data for an object.
+
+    This including a property set and references to other objects, object
+    spaces, and contexts.
+
+    See [MS-ONESTORE] Section 2.6.1
+    """
+
+    object_ids: ObjectSpaceObjectStreamOfOIDs
+    """Specifies the count and list of objects that are referenced by this
+    ObjectSpaceObjectPropSet."""
+
+    object_space_ids: typing.Optional['ObjectSpaceObjectStreamOfOSID']
+    """An optional list of object spaces referenced by this structure.
+
+    Must be present if the value of
+    object_ids.header.object_space_ids_not_present is false otherwise it must
+    not be present.
+    """
+
+    context_ids: typing.Optional['ObjectSpaceObjectStreamOfContextID']
+    """Specifies the count and list of contexts referenced by this structure.
+
+    Must be present if extended_streams_present field in the object_space_ids
+    header is true otherwise it must not be present.
+    """
+
+    body: 'PropertySet'
+    """Specifies properties that modify this object, and how other objects
+    relate to this object.
+    """
+
+    padding: bytes
+    """An optional array of bytes that must be present, must be zero and
+    be ignored. The total size of bytes in this structure must be a multiple
+    of 8. The size of padding field must not exceed 7 bytes but it can be 0."""
+
+    @classmethod
+    def decode(self, file_chunk: io.BytesIO) -> typing.Self:
+        """For now just return what we do decode which is the headers."""
+        count = int.from_bytes(file_chunk.read(3), byteorder='little')
+        remainder = int.from_bytes(file_chunk.read(1), byteorder='little')
+        header = ObjectSpaceObjectStreamHeader(
+            count,
+            remainder >> 2 & 0x40,
+            remainder & 1 == 1,
+            remainder & 2 == 2,
+        )
+        assert header.reserved == 0, "Decoding logic is broken"
+
+        ids = []
+        for _ in range(count):
+            raw_id = int.from_bytes(file_chunk.read(4), byteorder='little',
+                                    signed=False)
+            ids.append(CompactID(raw_id & 0xFF, raw_id >> 8))
+
+        object_ids = ObjectSpaceObjectStreamOfOIDs(header, ids)
+
+        if object_ids.header.object_space_ids_not_present:
+            raise NotImplementedError("Decoding the object space IDs.")
+        else:
+            object_space_ids = None
+
+        if object_ids.header.extended_streams_present:
+            raise NotImplementedError("Context IDs.")
+        else:
+            context_ids = None
+
+        property_count = int.from_bytes(
+            file_chunk.read(2), byteorder='little', signed=False,
+        )
+
+        property_ids = []
+        for _ in range(property_count):
+            raw_property_id = int.from_bytes(
+                file_chunk.read(4), byteorder='little', signed=False,
+            )
+
+            property_ids.append(
+                PropertyID(raw_property_id & 0x7FFFFFFF,
+                           raw_property_id >> 26 & 0x20,
+                           raw_property_id & 0x80000000 == 0)
+            )
+
+        body = PropertySet(property_count, property_ids)
+        return ObjectSpaceObjectPropSet(
+            object_ids, object_space_ids, context_ids, body, [],
+        )
+
+
+class FileDataStoreObject:
+    """Specifies the data for a file data object.
+
+    A file data object is an object that represents a file that was inserted
+    into a OneNote revision store file. It can be stored internally as a data
+    stream in the revision store file, or externally in the onefiles folder.
+
+    This is not a FileNode but is often referenced from a file node, such as
+    by FileDataStoreObjectReferenceFND.
+    """
+
+    TYPE_GUID: typing.ClassVar[Guid] = Guid.from_uuid(uuid.UUID(
+        hex="{BDE316E7-2665-4511-A4C4-8D4D0B7A9EAC}"))
+
+    TYPE_GUID_FOOTER: typing.ClassVar[Guid] = Guid.from_uuid(uuid.UUID(
+        hex="{71FBA722-0F79-4A0B-BB13-899256426B24}"))
+
+    guid_header: Guid
+    """A GUID, as specified by [MS-DTYP], that specifies the beginning of a
+    FileDataStoreObject.
+
+    This must be equal to {BDE316E7-2665-4511-A4C4-8D4D0B7A9EAC}.
+    """
+
+    size: int
+    """An unsigned integer that specifies the size, in bytes.
+
+    This is of the the FileData field without padding.
+    """
+
+    unused: int
+    """Must be zero and must be ignored - 4 bytes."""
+
+    reserved: int
+    """Must be zero and must be ignored - 4 bytes."""
+
+    file_data: bytes
+    """A stream of bytes that specifies the data for the file data object.
+
+    Padding is added to the end of the FileData stream to ensure that the
+    FileDataStoreObject structure ends on an 8-byte boundary.
+    """
+
+    guid_footer: Guid
+    """A GUID, as specified by [MS-DTYP], that specifies the end of a
+    ileDataStoreObject.
+
+    This must be equal to {71FBA722-0F79-4A0B-BB13-899256426B24}.
     """
 
 
@@ -880,6 +1144,8 @@ class JCID:
     bytes as specified by property set and file data object.
 
     This is a 32-bit unsigned integer.
+
+    See [MS-ONESTORE] Section 2.6.14.
     """
 
     index: int
@@ -941,19 +1207,19 @@ class ObjectDeclaration2Body:
     @classmethod
     def from_reader(cls, reader) -> typing.Self:
         """Construct this class from the bytes read from reader."""
-        raw_object_id = reader.read(4)
+        raw_object_id = int.from_bytes(reader.read(4), byteorder='little',
+                                       signed=False)
         raw_type_id = reader.read(4)
         flags = int.from_bytes(reader.read(1))
 
         if not hasattr(cls, '_warned'):
             LOG.warning(
-                "Conversion of to CompactID and JCID NYI - this message will "
-                "show once"
+                "Conversion of to JCID NYI - this message will show once",
             )
             cls._warned = True
 
         return cls(
-            raw_object_id,
+            CompactID(raw_object_id & 0xFF, raw_object_id >> 8),
             raw_type_id,
             flags & 1 == 1,
             flags & 2 == 2,
@@ -979,7 +1245,6 @@ class ObjectDeclaration2RefCountFND:
 
     reference_count: int
     """An unsigned integer (1 byte) that specifies the reference count for this object."""
-
 
 
 def read_file_node_chunk_reference(
@@ -1270,6 +1535,15 @@ def read_file_List(reader, reference: FileChunkReference) -> list:
     return file_nodes
 
 
+def find_types(nodes: list, file_node_type: type):
+    next_nodes = nodes[:]
+    while next_nodes:
+        node = next_nodes.pop()
+        if isinstance(node.data, file_node_type):
+            yield node.data
+        next_nodes.extend(node.children)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1305,3 +1579,18 @@ if __name__ == '__main__':
                         print(f"        {c} with {len(c.children)} children")
                     else:
                         print(f"        {c}")
+
+        print()
+        # Start decoding a file node.
+        for group_list in find_types(file_nodes, ObjectGroupListReferenceFND):
+            first_node_in_group = group_list.reference
+            object_group_nodes = read_file_List(reader, first_node_in_group)
+            for node in object_group_nodes:
+                if isinstance(node.data, ObjectDeclaration2RefCountFND):
+                    # The reference points to an ObjectSpaceObjectPropSet
+                    # structure.
+                    chunk = node.data.blob_reference.read_chunk(reader)
+                    property_set = ObjectSpaceObjectPropSet.decode(chunk)
+                    print(property_set)
+                else:
+                    print(node)
