@@ -48,7 +48,7 @@ echo Downloading base system with apk.
 
 if [ -f "packages.$FLAVOUR" ]
 then
-  xargs -a "packages.$FLAVOUR" apk --arch "$ARCH" -X "$BASE_URI/main/" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
+  xargs -a "packages.$FLAVOUR" apk --arch "$ARCH" -X "$BASE_URI/main/" -X "$BASE_URI/community/" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
 elif [ "$FLAVOUR" = "minimal" ] || [ "$FLAVOUR" = "plain" ]
 then
   # This is done second to allow for packages.minimal and packages.plain to
