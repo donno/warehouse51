@@ -3,7 +3,7 @@
 # This ended up resembling the following a lot:
 # https://github.com/marcov/firecracker-initrd/blob/master/container/build-initrd-in-ctr.sh
 
-ALPINE_VERSION=3.21
+ALPINE_VERSION=3.22
 ARCH=x86_64
 BASE_URI="https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION"
 ENABLE_NETWORKING=1
