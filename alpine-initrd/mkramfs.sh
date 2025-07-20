@@ -6,7 +6,7 @@
 ALPINE_VERSION=3.21
 ARCH=x86_64
 BASE_URI="https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION"
-ENABLE_NETWORKING=0
+ENABLE_NETWORKING=1
 FLAVOUR="$1"
 if [ "$FLAVOUR" = "--help" ]; then
   echo "$0 - Create initial RAM filesystem for Alpine."
@@ -138,7 +138,8 @@ then
   rm "/rootfs/configure.inside.$FLAVOUR.sh"
 fi
 
-(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > /work/initrdfs && cd - >/dev/null) || exit 1
+(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > "/work/initrdfs.$FLAVOUR" && cd - >/dev/null) || exit 1
 
 echo Usage example
-echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd initrdfs
+echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd "initrdfs.$FLAVOUR"
+
