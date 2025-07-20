@@ -1,0 +1,12 @@
+contents:
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+  repositories:
+    - https://packages.wolfi.dev/os
+  packages:
+    - ca-certificates-bundle
+    - wolfi-base
+
+    # Without installing mount, WSL will issue error:
+    #   wsl: Processing /etc/fstab with mount -a failed.
+    - mount

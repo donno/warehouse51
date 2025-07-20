@@ -1,0 +1,27 @@
+contents:
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+  repositories:
+    - https://packages.wolfi.dev/os
+  packages:
+    - ca-certificates-bundle
+    - wolfi-base
+    - podman
+
+    # iptables is required for networking in podman.
+    - iptables
+
+    # Without installing mount, WSL will issue error:
+    #   wsl: Processing /etc/fstab with mount -a failed.
+    - mount
+
+paths:
+  # Create the /var/tmp folder which is needed by podman.
+  - path: /var/tmp
+    type: directory
+    uid: 10000
+    gid: 10000
+    permissions: 0o755
+
+# Once this is installed in WSL then run the following:
+# $ podman run --rm -it quay.io/podman/hello
