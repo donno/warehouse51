@@ -242,10 +242,28 @@ impl protocol::Command for FileBackedCommandHandler {
             } else {
                 // Didn't find the object, it may be in a pack file.
                 info!(
-                    "Fetching {} for '{}' - it was not a loose object..",
+                    "Fetching {} for '{}' - it was not a loose object - copying all packs.",
                     hash, name
                 );
-                //todo!("Can't return the object yet.");
+
+                // {self.remote_path}/.git/packed-refs has the hash associated with the given ref.
+                //
+                // To see what is within a given pack, check its index file:
+                // $ git verify-pack -v .git/objects/pack/pack-<hash>.idx
+
+                // To save doing that, if there is only one pack file, it can simply copy that.
+                // Or quick and dirty copy all the packs for now.
+                let remote_pack_directory = self.remote_path.join("objects").join("pack");
+                let local_pack_directory = self.local_path.join("objects").join("pack");
+                std::fs::create_dir_all(local_pack_directory.clone()).expect("Directory all good.");
+
+                let entries = std::fs::read_dir(remote_pack_directory.clone()).unwrap();
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        std::fs::copy(entry.path(), local_pack_directory.join(entry.file_name()))
+                            .expect("TODO: Error handling");
+                    }
+                }
             }
         }
     }

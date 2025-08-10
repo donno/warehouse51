@@ -15,6 +15,9 @@ soon list.
 
 * Handle downloading every object needed during a fetch not.
 * Handle batch fetch
+* Handle reading the pack file to find what objects it contains.
+  This is instead of copying every pack file. That said, it might still be good idea to copy the idx file for every pack
+  that way its there and doesn't need to be fetched again when it is time to use the correpsonding pack.
 
 Notes
 -----
@@ -94,5 +97,6 @@ push refs/heads/main:refs/heads/main
 * https://git-scm.com/docs/gitremote-helpers
 * https://github.com/git/git/blob/v2.50.1/Documentation/gitprotocol-pack.adoc
 * https://git-scm.com/book/en/v2/Git-Internals-Transfer-Protocols
+* https://git-scm.com/docs/pack-format
 
 [1]: https://git-scm.com/book/en/v2/Git-Internals-Transfer-Protocols
