@@ -20,7 +20,7 @@ pub enum ObjectType {
         parents: Vec<String>,
         // The author, committer and commit message isn't required for this project.
     },
-    Tree,
+    Tree, // For tree, need to know other tree and blobs it references.
     Blob,
 }
 
@@ -203,6 +203,16 @@ mod tests {
         }
     }
 
-    // TODO: Add tree
-    // TODO: Add blob
+    #[test]
+    #[ignore] // Test doesn't pass yet due to stream not containing valid UTF-8.
+    fn decode_tree_from_path() {
+        let path = std::path::Path::new("testdata/e7691a046ef7d6dfc4bbf3862fff92f3641dd5");
+        let object =
+            read_object_from_file(path.to_path_buf()).expect("Test data should be readable.");
+        assert!(matches!(object, ObjectType::Tree {},));
+
+        // TODO: Test for the trees and blobs the tree references, once that is added.
+    }
+
+    // This project does not need to be able to read blobs.
 }
