@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-git2 = "0.20.2"
 log = "0.4.27"
 simplelog = "0.12.2"
 url = "2.5.4"

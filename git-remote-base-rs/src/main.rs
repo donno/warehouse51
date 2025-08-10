@@ -14,6 +14,7 @@ use std::collections::HashMap;
 
 use log::{LevelFilter, error, info, warn};
 
+mod file;
 mod protocol;
 
 struct BaseCommandHandler {
@@ -55,7 +56,11 @@ impl protocol::Command for BaseCommandHandler {
     }
 
     fn push(&self, source: &str, destination: &str, force_update: bool) {
-        todo!("TODO: Handle pushing {} to {}.", source, destination);
+        if force_update {
+            todo!("TODO: Handle force pushing {} to {}.", source, destination);
+        } else {
+            todo!("TODO: Handle pushing {} to {}.", source, destination);
+        }
 
         // Basic idea is this needs to resolve the source reference as the starting point.
 
@@ -101,14 +106,19 @@ fn main() {
         panic!("Expected the scheme of the URL to be \"base\".");
     }
 
-    let mut handler = BaseCommandHandler::default();
+    let mut handler = file::FileBackedCommandHandler::new(arguments.url, path);
+    //let mut handler = BaseCommandHandler::default();
     loop {
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
             Ok(_) => {
-                protocol::handle_command(input.to_string().trim(), &mut handler);
+                if !protocol::handle_command(input.to_string().trim(), &mut handler) {
+                    break;
+                }
             }
             Err(error) => println!("error: {error}"),
         }
     }
+
+    //
 }

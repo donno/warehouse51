@@ -1,0 +1,251 @@
+// Provides an implementation of the git-helper protocol using an existing repository.
+//
+// The implementation reads  and copies the appropriate files from an existing git repository on
+// disk.
+//
+// In this case, I'm using the https://gist.github.com/donno/34aeb93dbaefa13a0d6a41953a17c024 as
+// the demo.
+// $ git clone base://fs/34aeb93dbaefa13a0d6a41953a17c024 34aeb93dbaefa13a0d6a41953a17c024_base
+//
+// The alternative is to use libgit2 to read the repository.
+
+use log::{error, info, warn};
+use std::collections::HashMap;
+use std::io::BufRead;
+
+use crate::protocol;
+
+pub struct FileBackedCommandHandler {
+    remote_path: std::path::PathBuf,
+    local_path: std::path::PathBuf,
+    options: HashMap<String, String>,
+}
+
+impl FileBackedCommandHandler {
+    pub fn new(url: url::Url, destination_path: std::path::PathBuf) -> Self {
+        if url.path().is_empty() {
+            panic!("Expected the URL to contain path: Use base://file/<repo-name>");
+        }
+        let base_path: std::path::PathBuf = match std::env::var_os("GIT_SOURCE_DIRECTORY") {
+            Some(path) => path.into(),
+            None => panic!("Environment variable GIT_SOURCE_DIRECTORY not set"),
+        };
+
+        info!("Outputting URL: {}", url);
+        let source_path = base_path.join(&url.path()[1..]).join(".git");
+
+        if !source_path.exists() {
+            panic!(
+                "The source repository could not be found at {}",
+                source_path.display()
+            );
+        }
+
+        FileBackedCommandHandler {
+            remote_path: source_path,
+            local_path: std::fs::canonicalize(destination_path)
+                .expect("Can't canonicalise the destination path"),
+            options: HashMap::new(),
+        }
+    }
+
+    // For a fetch, this could be Option<> and so communicates if it exists or not.
+    fn remote_loose_object_path(&self, hash: &str) -> std::path::PathBuf {
+        let object_directory = self.remote_path.join("objects");
+        object_directory.join(&hash[..2]).join(&hash[2..])
+    }
+
+    fn local_loose_object_path(&self, hash: &str) -> std::path::PathBuf {
+        let destination_object_directory = self.local_path.join("objects");
+        destination_object_directory
+            .join(&hash[..2])
+            .join(&hash[2..])
+    }
+
+    // Read the hash of a local reference.
+    fn read_local_reference(&self, reference: &str) -> Result<String, std::io::Error> {
+        let file = std::fs::File::open(self.local_path.join(reference))?;
+        let mut buffer = std::io::BufReader::new(file);
+        let mut line = String::new();
+        buffer.read_line(&mut line)?;
+        Ok(line.trim_end().to_string())
+    }
+    }
+}
+
+impl Default for FileBackedCommandHandler {
+    fn default() -> Self {
+        FileBackedCommandHandler {
+            remote_path: match std::env::var_os("GIT_SOURCE_DIRECTORY") {
+                Some(path) => path.into(),
+                None => panic!("Environment variable GIT_SOURCE_DIRECTORY not set"),
+            },
+            local_path: match std::env::var_os("GIT_DIR") {
+                Some(path) => path.into(),
+                None => panic!("Environment variable $GIT_DIR not set"),
+            },
+            options: HashMap::new(),
+        }
+    }
+}
+
+fn read_lines<P>(filename: P) -> std::io::Result<std::io::Lines<std::io::BufReader<std::fs::File>>>
+where
+    P: AsRef<std::path::Path>,
+{
+    let file = std::fs::File::open(filename)?;
+    Ok(std::io::BufReader::new(file).lines())
+}
+
+impl protocol::Command for FileBackedCommandHandler {
+    fn set_option(&mut self, name: &str, value: &str) -> protocol::SetOptionResult {
+        self.options.insert(name.to_string(), value.to_string());
+        protocol::SetOptionResult::Ok {}
+    }
+
+    fn list_references(&self) -> Vec<protocol::Reference> {
+        // Lists the refs, one per line, in the format "<value> <name> [<attr> ...]".
+        //
+        // Fake for now.
+        // Mock version could use "git for-each-ref" on real one and strip out the type.
+        let mut references = Vec::new();
+
+        let refs_directory = self.remote_path.join("refs");
+
+        let entries = std::fs::read_dir(refs_directory.clone()).unwrap();
+        for entry in entries {
+            match entry {
+                Ok(entry) => {
+                    if entry
+                        .file_type()
+                        .expect("Unable to determine file type.")
+                        .is_dir()
+                    {
+                        let children = std::fs::read_dir(entry.path()).unwrap();
+                        for child in children {
+                            let child_entry = child.unwrap();
+                            if child_entry.file_type().unwrap().is_file() {
+                                let hash = if let Ok(mut lines) = read_lines(child_entry.path()) {
+                                    lines.next().unwrap().unwrap()
+                                } else {
+                                    String::new()
+                                };
+
+                                if hash.is_empty() {
+                                    continue;
+                                }
+
+                                match child_entry.path().strip_prefix(self.remote_path.clone()) {
+                                    Ok(ref_name_path) => {
+                                        let ref_name = ref_name_path
+                                            .to_str()
+                                            .expect("Expect UTF-8")
+                                            .to_string();
+                                        references.push(protocol::Reference {
+                                            hash: hash.to_string(),
+                                            // Slash conversion handles Windows style paths.
+                                            name: ref_name.replace("\\", "/"),
+                                        });
+                                    }
+                                    Err(_) => {
+                                        error!("Failed to remove base-path prefix from path.")
+                                    }
+                                }
+                            } else {
+                                warn!(
+                                    "Unhandled item in reference directory: {}",
+                                    entry.path().display()
+                                );
+                            }
+                        }
+                    } else {
+                        warn!(
+                            "Unhandled file in reference directory: {}",
+                            entry.path().display()
+                        );
+                    }
+                }
+                Err(_) => {
+                    error!(
+                        "Failed to read reference directory: {}",
+                        refs_directory.display()
+                    );
+                }
+            }
+        }
+
+        references
+    }
+
+    fn fetch_object(&self, hash: &str, name: &str) {
+        // Fetch commands are sent in a batch, one per line, terminated with a blank line.
+        // Outputs a single blank line when all fetch commands in the same batch are complete. Only objects which were reported in the output of list with a sha1 may be fetched this way.
+        let source_object = self
+            .remote_path
+            .join("objects")
+            .join(&hash[..2])
+            .join(&hash[2..]);
+        let destination_object_directory = self.local_path.join("objects");
+        let destination_object = destination_object_directory
+            .join(&hash[..2])
+            .join(&hash[2..]);
+
+        if source_object.is_file() {
+            // Found the object as a loose object.
+            info!(
+                "Fetching {} for '{}' - it was a loose object to {}",
+                hash,
+                name,
+                destination_object.display()
+            );
+            std::fs::create_dir_all(
+                destination_object
+                    .parent()
+                    .expect("Object path is sub-directory"),
+            )
+            .expect("TODO: Error handling");
+
+            // Ideally, the file would be hashed first to make sure its content matches its
+            // identity.
+            std::fs::copy(source_object, destination_object).expect("TODO: Error handling");
+
+            // TODO: Need to handle fetching its dependencies.
+        } else {
+            // Didn't find the object, it may be in a pack file.
+            info!(
+                "Fetching {} for '{}' - it was not a loose object..",
+                hash, name
+            );
+            todo!("Can't return the object yet.");
+        }
+    }
+
+    fn push(&self, source: &str, destination: &str, force_update: bool) {
+        // The first step is to find what source refers to.
+        //
+        // This step could be good one to move into the caller of push() i.e. the protocol module as
+        // reading the local repository will be common.
+        if let Ok(local_reference) = self.read_local_reference(source) {
+            if force_update {
+                todo!(
+                    "TODO: Handle force pushing {} ({}) to {}.",
+                    source,
+                    local_reference,
+                    destination
+                );
+            } else {
+                todo!(
+                    "TODO: Handle pushing {} ({}) to {}.",
+                    source,
+                    local_reference,
+                    destination
+                );
+            }
+
+        // The way git-remote-s3 faked this was it would simply call "git bundle create" and upload
+        // the entire thing, which is fine if you snapshotting.
+        } else {
+            eprintln!("Failed to read reference: {}", source);
+        }
+    }
+}

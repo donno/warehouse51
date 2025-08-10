@@ -7,6 +7,15 @@ This one calls onto a git executable to read the example blobs.
 
 See https://git-scm.com/docs/gitremote-helpers for details.
 
+TODOs
+-----
+There are lots of things to do/handle but this list aims to track
+the known things that are missing and are likely on the implement
+soon list.
+
+* Handle downloading every object needed during a fetch not.
+* Handle batch fetch
+
 Notes
 -----
 `git clone base://foo/bar`

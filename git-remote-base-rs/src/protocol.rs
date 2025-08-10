@@ -17,13 +17,13 @@
 // list -> fetch -> ...
 
 use log::{error, info};
+use std::io::Write;
 
 pub enum SetOptionResult {
     Ok,
     Unsupported,
     Error { message: String },
 }
-
 
 pub struct Arguments {
     pub program: String,
@@ -120,12 +120,28 @@ fn handle_capabilities() {
 
 // Enum of the Capabilities might be good or if Command could dictate
 // the capabilities. Or maybe an enum with the callbacks for optional parts.
-pub fn handle_command(line: &str, handler: &mut impl Command) {
+pub fn handle_command(line: &str, handler: &mut impl Command) -> bool {
     let mut command_components = line.split(' ');
     let command = match command_components.next() {
         Some(command) => command,
         None => "",
     };
+
+    if command.is_empty() {
+        // Assume it is the new-line terminating a batch of "fetch".
+        info!("Received blank line - better handling of batch fetch NYI.");
+
+        // Tell the caller we are done handling it.
+        match writeln!(std::io::stdout(), "") {
+            Ok(_) => info!("Successfully told caller that we are done."),
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                error!("stdout is closed or broken.");
+                return false;
+            }
+            Err(e) => error!("An unexpected error occurred: {}", e),
+        }
+        return true;
+    }
     info!("Command received: {}", command);
     match command {
         "capabilities" => handle_capabilities(),
@@ -231,4 +247,5 @@ pub fn handle_command(line: &str, handler: &mut impl Command) {
         }
         _ => error!("error: remote-base: unknown command '{}' from git", command),
     }
+    return true;
 }
