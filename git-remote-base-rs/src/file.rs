@@ -210,8 +210,9 @@ impl protocol::Command for FileBackedCommandHandler {
                 std::fs::copy(source_object, destination_object.clone())
                     .expect("TODO: Error handling");
 
+                // TODO: handle error for below better than just ignoring it.
                 let object = read_object_from_file(destination_object.clone())
-                    .expect("TODO: Error handling for IO");
+                    .unwrap_or(ObjectType::Unknown {});
                 match object {
                     ObjectType::Unknown => {
                         error!(
@@ -220,17 +221,15 @@ impl protocol::Command for FileBackedCommandHandler {
                         );
                     }
                     ObjectType::Commit { tree, parents } => {
-                        // TODO: Not tested this yet.
-                        // if let Some(tree) = tree
-                        // {
-                        //     objects_to_fetch.push(tree);
-                        // }
+                        if let Some(tree) = tree {
+                            objects_to_fetch.push(tree);
+                        }
                         for parent in parents {
                             objects_to_fetch.push(parent);
                         }
                     }
-                    ObjectType::Tree => {
-                        panic!("NYI - Fetching a tree");
+                    ObjectType::Tree { references } => {
+                        objects_to_fetch.extend(references);
                     }
                     ObjectType::Blob => {
                         // Nothing is required here as a blob if a leaf and doesn't reference any

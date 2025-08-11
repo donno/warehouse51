@@ -21,7 +21,11 @@ pub enum ObjectType {
         parents: Vec<String>,
         // The author, committer and commit message isn't required for this project.
     },
-    Tree, // For tree, need to know other tree and blobs it references.
+    Tree {
+        // The references can be other trees or blobs.
+        references: Vec<String>,
+        // The name and mode of the entries are required for this project so aren't collected.
+    },
     Blob,
 }
 
@@ -60,6 +64,41 @@ fn read_prefixed_line(line: Option<&str>, expected_prefix: &str) -> Option<Strin
         // Line was missing.
         None
     }
+}
+
+struct TreeEntry {
+    mode: String,
+    name: String,
+    hash: String,
+
+    size: usize,
+    // The size of the entry in the tree object.
+}
+
+// Read a tree entry in the form: [mode] [entry-name]\0[SHA-1 of referencing blob or tree]
+fn read_tree_entry(data: &[u8]) -> Result<TreeEntry, String> {
+    let first_separator = memchr(b' ', data);
+    let second_separator = memchr(b'\0', data);
+    if first_separator.is_none() {
+        return Err("Invalid tree entry - no space found.".to_string());
+    }
+    if second_separator.is_none() {
+        return Err("Invalid tree entry - no null terminator found after name.".to_string());
+    }
+
+    let name_end = second_separator.unwrap(); // Checked above.
+
+    let mode = std::str::from_utf8(&data[..first_separator.unwrap()]).expect("not UTF-8");
+    let name =
+        std::str::from_utf8(&data[first_separator.unwrap() + 1..name_end]).expect("not UTF-8");
+    const HASH_SIZE: usize = 20;
+
+    Ok(TreeEntry {
+        mode: mode.to_string(),
+        name: name.to_string(),
+        hash: hex::encode(&data[name_end + 1..name_end + 1 + HASH_SIZE]),
+        size: name_end + 1 + HASH_SIZE,
+    })
 }
 
 // Read the tree from an optional line.
@@ -117,11 +156,21 @@ fn read_object_header(data: &[u8]) -> ObjectHeader {
         }
         b"tree " => {
             // A tree object is made up of entries.
-            // [mode] [entry-name]\0[SHA-1 of referencing blob or tree]
-            //
-            // TODO: Parse the above.
+            // TODO: Keep reading entries until there are none-left.
+            let data_start = size_terminator.unwrap() + 1;
+            let data_end = data_start + size;
+
+            let mut references = Vec::new();
+
+            let mut entry_start = data_start;
+            while entry_start < data_end {
+                let entry = read_tree_entry(&data[entry_start..data_end]).expect("Entry");
+                references.push(entry.hash);
+                entry_start += entry.size + 1;
+            }
+
             ObjectHeader {
-                object_type: ObjectType::Tree {},
+                object_type: ObjectType::Tree { references },
                 size,
             }
         }
@@ -139,7 +188,7 @@ fn read_object_header(data: &[u8]) -> ObjectHeader {
 #[cfg(test)]
 mod tests {
     use crate::objects::{
-        FIELD_PREFIX_TREE, ObjectType, read_object_from_file, read_object_header,
+        FIELD_PREFIX_TREE, ObjectType, read_object_from_file, read_object_header, read_tree_entry,
     };
     use flate2::read::ZlibDecoder;
     use memchr::memchr;
@@ -214,6 +263,56 @@ mod tests {
         let size = size_str.parse::<usize>().unwrap_or_else(|_| 0);
 
         assert_eq!(size, 43);
+
+        // $ git cat-file -p d4e7691a046ef7d6dfc4bbf3862fff92f3641dd5
+        // 100644 blob 45115f4b2a86b84dc323cbba9e53017f57dc8dc1    fetch_vcdist.py
+        let entry = read_tree_entry(&buffer[size_terminator + 1..]).expect("Entry");
+        assert_eq!(entry.name, "fetch_vcdist.py");
+        assert_eq!(entry.mode, "100644");
+        assert_eq!(entry.hash, "45115f4b2a86b84dc323cbba9e53017f57dc8dc1");
+    }
+
+    #[test]
+    fn decode_tree_multiple_entries() {
+        let path = std::path::Path::new("testdata/cdeea9ab369e5a1dd6f586e5464d13976a6263");
+        let file = std::fs::File::open(path).expect("Test data should exist.");
+        let mut decoder = ZlibDecoder::new(file);
+        let mut buffer = Vec::new();
+        decoder
+            .read_to_end(&mut buffer)
+            .expect("Test data should be readable.");
+
+        assert!(buffer.starts_with(b"tree "));
+
+        let size_terminator = memchr(b'\0', &buffer).expect("Found terminator");
+        let size_str = std::str::from_utf8(&buffer[5..size_terminator]).expect("not UTF-8");
+        let size = size_str.parse::<usize>().unwrap_or_else(|_| 0);
+
+        assert_eq!(size, 393);
+
+        // $ git cat-file -p 3acdeea9ab369e5a1dd6f586e5464d13976a6263
+        // 100644 blob c472b4ea0a781061dab1f394627222735d4215bd    404.html
+        // 100644 blob 12f97a480985b12fa2c6654d601ce260ce63b38a    _config.yml
+        // 040000 tree 697458dce5850b4e134b11d940d49ac124f74b37    _drafts
+        // Plus more.
+        let entry = read_tree_entry(&buffer[size_terminator + 1..]).expect("Entry");
+        assert_eq!(entry.name, "404.html");
+        assert_eq!(entry.mode, "100644");
+        assert_eq!(entry.hash, "c472b4ea0a781061dab1f394627222735d4215bd");
+
+        // Problem with read_tree_entry() is it doesn't include the size of the entry so you
+        // know where the next one is.
+        //
+        // The following calculates the offset based on the size of the previous entry.
+        let second_entry =
+            read_tree_entry(&buffer[9 + "100644".len() + 21 + size_terminator + 1..])
+                .expect("Entry");
+        assert_eq!(second_entry.name, "_config.yml");
+        assert_eq!(second_entry.mode, "100644");
+        assert_eq!(
+            second_entry.hash,
+            "12f97a480985b12fa2c6654d601ce260ce63b38a"
+        );
     }
 
     #[test]
@@ -221,9 +320,40 @@ mod tests {
         let path = std::path::Path::new("testdata/e7691a046ef7d6dfc4bbf3862fff92f3641dd5");
         let object =
             read_object_from_file(path.to_path_buf()).expect("Test data should be readable.");
-        assert!(matches!(object, ObjectType::Tree {},));
+        assert!(matches!(object, ObjectType::Tree { references: _ },));
 
         // TODO: Test for the trees and blobs the tree references, once that is added.
+        let expected_blob = "45115f4b2a86b84dc323cbba9e53017f57dc8dc1".to_string();
+        if let ObjectType::Tree { references } = object.try_into().unwrap() {
+            assert_eq!(references, vec!(expected_blob));
+        }
+    }
+
+    #[test]
+    fn decode_tree_multiple_entries_from_path() {
+        let path = std::path::Path::new("testdata/cdeea9ab369e5a1dd6f586e5464d13976a6263");
+        let object =
+            read_object_from_file(path.to_path_buf()).expect("Test data should be readable.");
+        assert!(matches!(object, ObjectType::Tree { references: _ },));
+
+        let expected_references = vec![
+            "c472b4ea0a781061dab1f394627222735d4215bd".to_string(),
+            "12f97a480985b12fa2c6654d601ce260ce63b38a".to_string(),
+            "697458dce5850b4e134b11d940d49ac124f74b37".to_string(),
+            "610986f34246d351aa1ff8a0481f30ee6db14971".to_string(),
+            "14e993c397283385b2db77c2626ecf3660f1d9ea".to_string(),
+            "e2e4392673a78eca0e2b39a6d63a83064b09689b".to_string(),
+            "e64f70132181aba02f2e657c5787ffb32536a3d1".to_string(),
+            "8cd655b97ace9c117ae2090411a797b15cf68294".to_string(),
+            "2603ca6a57793ef890b81eee3f02b1f1eb93d0f6".to_string(),
+            "e1791c9c70132438dd51fe2f0db45f88f01e24ca".to_string(),
+            "7cad4a33f9b2a6cf06b9d99aec9f636d4011b54a".to_string(),
+        ];
+
+        if let ObjectType::Tree { references } = object.try_into().unwrap() {
+            assert_eq!(references.len(), expected_references.len());
+            assert_eq!(references, expected_references);
+        }
     }
 
     // This project does not need to be able to read blobs.

@@ -117,7 +117,10 @@ fn main() {
                     break;
                 }
             }
-            Err(error) => println!("error: {error}"),
+            Err(error) => {
+                error!("Error reading next line of input: {}", error);
+                println!("error: {error}")
+            }
         }
     }
 
