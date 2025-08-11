@@ -16,8 +16,9 @@ soon list.
 * Handle downloading every object needed during a fetch not.
 * Handle batch fetch
 * Handle reading the pack file to find what objects it contains.
-  This is instead of copying every pack file. That said, it might still be good idea to copy the idx file for every pack
-  that way its there and doesn't need to be fetched again when it is time to use the correpsonding pack.
+  This is instead of copying every pack file. That said, it might still be good
+  idea to copy the idx file for every pack that way its there and doesn't need
+  to be fetched again when it is time to use the corresponding pack.
 
 Notes
 -----

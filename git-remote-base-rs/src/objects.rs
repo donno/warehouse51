@@ -8,7 +8,8 @@
 // to provide complete handling of the object types.
 
 use flate2::read::ZlibDecoder;
-use std::io::Read;
+use memchr::memchr;
+use std::io::{BufRead, Read};
 
 const FIELD_PREFIX_TREE: &'static str = "tree ";
 const FIELD_PREFIX_PARENT: &'static str = "parent ";
@@ -31,7 +32,7 @@ pub struct ObjectHeader {
     pub object_type: ObjectType,
 
     // The size of the object in bytes.
-    pub size: u32,
+    pub size: usize,
 }
 
 pub fn read_object_from_file(path: std::path::PathBuf) -> Result<ObjectType, std::io::Error> {
@@ -39,12 +40,12 @@ pub fn read_object_from_file(path: std::path::PathBuf) -> Result<ObjectType, std
     let mut decoder = ZlibDecoder::new(file);
 
     // It would be nice to be above to ask for first 1024 decompressed bytes.
-    let mut data = String::new();
-    decoder.read_to_string(&mut data)?;
-    Ok(read_object_header(&data).object_type)
+    let mut buffer = Vec::new();
+    decoder.read_to_end(&mut buffer)?;
+    Ok(read_object_header(&buffer).object_type)
 }
 
-pub fn read_object(decompressed_data: &String) -> ObjectType {
+pub fn read_object(decompressed_data: &[u8]) -> ObjectType {
     read_object_header(decompressed_data).object_type
 }
 
@@ -79,79 +80,70 @@ fn read_parents(mut lines: std::str::Lines) -> Vec<String> {
     parents
 }
 
-fn read_object_header(data: &String) -> ObjectHeader {
-    // Alternative is to look at first char, then read the rest to confirm.
-    const TYPE_PREFIX_COMMIT: &'static str = "commit ";
-    const TYPE_PREFIX_TREE: &'static str = "tree ";
-    const TYPE_PREFIX_BLOB: &'static str = "blob ";
-
-    let is_commit = data.starts_with(TYPE_PREFIX_COMMIT);
-    let is_tree = data.starts_with(TYPE_PREFIX_TREE);
-    let is_blob = data.starts_with(TYPE_PREFIX_BLOB);
-
-    // Between space and null is the size in ASCII.
-    if !is_commit && !is_tree && !is_blob {
+fn read_object_header(data: &[u8]) -> ObjectHeader {
+    // The header starts with: <type>[space]<size>[NUL]
+    let type_terminator = if let Some(type_terminator) = memchr(b' ', &data) {
+        type_terminator + 1 // Include the space at the end.
+    } else {
+        // There was no space at all - invalid header.
         return ObjectHeader {
             object_type: ObjectType::Unknown,
             size: 0,
         };
-    }
-
-    // The start is known based on the object type, so a find(' ') is not needed.
-    let size_start = if is_commit {
-        TYPE_PREFIX_COMMIT.len()
-    } else if is_tree {
-        TYPE_PREFIX_TREE.len()
-    } else if is_blob {
-        TYPE_PREFIX_BLOB.len()
-    } else {
-        0 // This should be unreachable as the statement above will exit in this case.
     };
 
-    let size = if let Some(size_end) = data.find('\0') {
-        let size_str = &data[size_start..size_end];
-        size_str.parse::<u32>().unwrap_or_else(|_| 0)
+    let size_terminator = memchr(b'\0', &data);
+    let size = if let Some(size_end) = size_terminator {
+        let size_str = std::str::from_utf8(&data[type_terminator..size_end]).expect("not UTF-8");
+        size_str.parse::<usize>().unwrap_or_else(|_| 0)
     } else {
         0
     };
 
     // If no null character is found treat it as no data.
-    let data_start = data.find('\0').unwrap_or(data.len() - 1) + 1;
-    if is_commit {
-        let mut lines = data[data_start..].lines();
-        let tree = read_tree(lines.next());
-        let parents = read_parents(lines);
-
-        // read_parents() would have already read the next line, so it ideally should return
-        // parents and next_line, however, this project doesn't need it.
-
-        ObjectHeader {
-            object_type: ObjectType::Commit { tree, parents },
-            size,
+    match &data[..type_terminator] {
+        b"commit " => {
+            let string =
+                std::str::from_utf8(&data[size_terminator.unwrap() + 1..size]).expect("not UTF-8");
+            let mut lines = string.lines();
+            let tree = read_tree(lines.next());
+            let parents = read_parents(lines);
+            // read_parents() would have already read the next line, so it ideally should return
+            // parents and next_line, however, this project doesn't need it.
+            ObjectHeader {
+                object_type: ObjectType::Commit { tree, parents },
+                size,
+            }
         }
-    } else if is_tree {
-        ObjectHeader {
-            object_type: ObjectType::Tree {},
-            size,
+        b"tree " => {
+            // A tree object is made up of entries.
+            // [mode] [entry-name]\0[SHA-1 of referencing blob or tree]
+            //
+            // TODO: Parse the above.
+            ObjectHeader {
+                object_type: ObjectType::Tree {},
+                size,
+            }
         }
-    } else if is_blob {
-        ObjectHeader {
+        b"blob " => ObjectHeader {
             object_type: ObjectType::Blob {},
             size,
-        }
-    } else {
-        ObjectHeader {
+        },
+        _ => ObjectHeader {
             object_type: ObjectType::Unknown,
             size: 0,
-        }
+        },
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::objects::{ObjectType, read_object_from_file, read_object_header};
+    use crate::objects::{
+        FIELD_PREFIX_TREE, ObjectType, read_object_from_file, read_object_header,
+    };
     use flate2::read::ZlibDecoder;
-    use std::io::Read;
+    use memchr::memchr;
+    use std::io::{BufRead, Read};
 
     #[test]
     fn decode_commit() {
@@ -160,10 +152,12 @@ mod tests {
         let mut decoder = ZlibDecoder::new(file);
 
         // It would be nice to be above to ask for first 1024 decompressed bytes.
-        let mut string = String::new();
-        decoder.read_to_string(&mut string).unwrap();
+        let mut buffer = Vec::new();
+        decoder
+            .read_to_end(&mut buffer)
+            .expect("Test data should be readable.");
 
-        let header = read_object_header(&string);
+        let header = read_object_header(&buffer);
         assert!(matches!(
             header.object_type,
             ObjectType::Commit {
@@ -172,7 +166,7 @@ mod tests {
             }
         ));
         assert_eq!(header.size, 336);
-        assert_eq!(string.len() - "commit 336\0".len(), 336);
+        assert_eq!(buffer.len() - "commit 336\0".len(), 336);
 
         let expected_tree = "d4e7691a046ef7d6dfc4bbf3862fff92f3641dd5".to_string();
         let expected_parent = "69c3f5e740fd83a1e5d08f05055b3c4c1c98040d".to_string();
@@ -204,7 +198,25 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Test doesn't pass yet due to stream not containing valid UTF-8.
+    fn decode_tree() {
+        let path = std::path::Path::new("testdata/e7691a046ef7d6dfc4bbf3862fff92f3641dd5");
+        let file = std::fs::File::open(path).expect("Test data should exist.");
+        let mut decoder = ZlibDecoder::new(file);
+        let mut buffer = Vec::new();
+        decoder
+            .read_to_end(&mut buffer)
+            .expect("Test data should be readable.");
+
+        assert!(buffer.starts_with(b"tree "));
+
+        let size_terminator = memchr(b'\0', &buffer).expect("Found terminator");
+        let size_str = std::str::from_utf8(&buffer[5..size_terminator]).expect("not UTF-8");
+        let size = size_str.parse::<usize>().unwrap_or_else(|_| 0);
+
+        assert_eq!(size, 43);
+    }
+
+    #[test]
     fn decode_tree_from_path() {
         let path = std::path::Path::new("testdata/e7691a046ef7d6dfc4bbf3862fff92f3641dd5");
         let object =
