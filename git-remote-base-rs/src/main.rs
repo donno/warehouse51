@@ -12,6 +12,7 @@
 
 use std::collections::HashMap;
 
+use crate::file::FileBackedCommandHandler;
 use log::{LevelFilter, error, info, warn};
 
 mod file;
@@ -68,6 +69,10 @@ impl protocol::Command for BaseCommandHandler {
         // The way git-remote-s3 faked this was it would simply call "git bundle create" and upload
         // the entire thing, which is fine if you snapshotting.
     }
+
+    fn finalisation(&self, remote_name: String) {
+        info!("Finalise remote: {}", remote_name);
+    }
 }
 
 // This was for another part of the protocol which would need to be opt-in.
@@ -123,6 +128,5 @@ fn main() {
             }
         }
     }
-
-    //
+    protocol::Command::finalisation(&handler, arguments.remote);
 }

@@ -54,6 +54,9 @@ pub trait Command {
     // Discover remote refs and push local commits and the history leading up to them to new or
     // existing remote refs.
     fn push(&self, source: &str, destination: &str, force_update: bool);
+
+    // Perform any steps to finalise the operation.
+    fn finalisation(&self, remote_name: String);
 }
 
 // Parse the arguments for a git-remote helper program.

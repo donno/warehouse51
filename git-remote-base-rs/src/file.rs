@@ -13,7 +13,7 @@ use crate::objects::{ObjectType, read_object_from_file};
 use crate::protocol;
 use log::{error, info, warn};
 use std::collections::HashMap;
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 
 pub struct FileBackedCommandHandler {
     remote_path: std::path::PathBuf,
@@ -265,6 +265,21 @@ impl protocol::Command for FileBackedCommandHandler {
                 }
             }
         }
+
+        if let Some(cloning) = self.options.get("cloning") {
+            if cloning == "true" {
+                // Fetching cfe86ea53b653d62bfb5332a04877c563237ea69 for 'refs/heads/master'.
+                let reference_path = self.local_path.join(name);
+                std::fs::create_dir_all(reference_path.parent().expect("Must have a parent"))
+                    .expect("Directory all good.");
+                if let Ok(mut file) = std::fs::File::create(reference_path.clone()) {
+                    file.write_all(hash.as_ref())
+                        .expect("NYI Error handling/reporting.");
+                } else {
+                    error!("Unable to write {} to {}", hash, reference_path.display());
+                }
+            }
+        }
     }
 
     fn push(&self, source: &str, destination: &str, force_update: bool) {
@@ -293,6 +308,30 @@ impl protocol::Command for FileBackedCommandHandler {
         // the entire thing, which is fine if you snapshotting.
         } else {
             eprintln!("Failed to read reference: {}", source);
+        }
+    }
+
+    fn finalisation(&self, remote_name: String) {
+        // Write the refs/remotes/<name>/HEAD file if cloning.
+        let false_string = "false".to_string();
+        let cloning = self.options.get("cloning").unwrap_or(&false_string);
+        if cloning == "true" {
+            let remote_refs = self
+                .local_path
+                .join("refs")
+                .join("remotes")
+                .join(remote_name.to_string());
+            std::fs::create_dir_all(remote_refs.clone()).expect("Directory all good.");
+
+            // Write the HEAD file for the remote.
+            if let Ok(mut file) = std::fs::File::create(remote_refs.join("HEAD")) {
+                // TODO: This branch name won't work if it contains main.
+                let contents = format!("ref: refs/remotes/{}/master", remote_name);
+                file.write_all(contents.as_ref())
+                    .expect("NYI Error handling/reporting.");
+            } else {
+                error!("Unable to write to HEAD file in {}", remote_refs.display());
+            }
         }
     }
 }

@@ -7,18 +7,26 @@ This one calls onto a git executable to read the example blobs.
 
 See https://git-scm.com/docs/gitremote-helpers for details.
 
+Recently complete
+-----------------
+
+* Download every object loose object needed during a fetch.
+  * Currently, all packs are downloaded.
+* Cloning a repository work - where it is cloned from already checked out
+  repository.
+
 TODOs
 -----
 There are lots of things to do/handle but this list aims to track
 the known things that are missing and are likely on the implement
 soon list.
 
-* Handle downloading every object needed during a fetch not.
 * Handle batch fetch
 * Handle reading the pack file to find what objects it contains.
   This is instead of copying every pack file. That said, it might still be good
   idea to copy the idx file for every pack that way its there and doesn't need
   to be fetched again when it is time to use the corresponding pack.
+* Handle push
 
 Notes
 -----
