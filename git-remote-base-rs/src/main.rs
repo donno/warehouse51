@@ -12,8 +12,7 @@
 
 use std::collections::HashMap;
 
-use crate::file::FileBackedCommandHandler;
-use log::{LevelFilter, error, info, warn};
+use log::{LevelFilter, error, info};
 
 mod file;
 mod objects;

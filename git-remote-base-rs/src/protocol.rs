@@ -125,10 +125,7 @@ fn handle_capabilities() {
 // the capabilities. Or maybe an enum with the callbacks for optional parts.
 pub fn handle_command(line: &str, handler: &mut impl Command) -> bool {
     let mut command_components = line.split(' ');
-    let command = match command_components.next() {
-        Some(command) => command,
-        None => "",
-    };
+    let command: &str = command_components.next().unwrap_or_else(|| "");
 
     if command.is_empty() {
         // Assume it is the new-line terminating a batch of "fetch".

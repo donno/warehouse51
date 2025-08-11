@@ -9,7 +9,7 @@
 
 use flate2::read::ZlibDecoder;
 use memchr::memchr;
-use std::io::{BufRead, Read};
+use std::io::Read;
 
 const FIELD_PREFIX_TREE: &'static str = "tree ";
 const FIELD_PREFIX_PARENT: &'static str = "parent ";
@@ -47,10 +47,6 @@ pub fn read_object_from_file(path: std::path::PathBuf) -> Result<ObjectType, std
     let mut buffer = Vec::new();
     decoder.read_to_end(&mut buffer)?;
     Ok(read_object_header(&buffer).object_type)
-}
-
-pub fn read_object(decompressed_data: &[u8]) -> ObjectType {
-    read_object_header(decompressed_data).object_type
 }
 
 fn read_prefixed_line(line: Option<&str>, expected_prefix: &str) -> Option<String> {
@@ -187,12 +183,10 @@ fn read_object_header(data: &[u8]) -> ObjectHeader {
 
 #[cfg(test)]
 mod tests {
-    use crate::objects::{
-        FIELD_PREFIX_TREE, ObjectType, read_object_from_file, read_object_header, read_tree_entry,
-    };
+    use crate::objects::{ObjectType, read_object_from_file, read_object_header, read_tree_entry};
     use flate2::read::ZlibDecoder;
     use memchr::memchr;
-    use std::io::{BufRead, Read};
+    use std::io::Read;
 
     #[test]
     fn decode_commit() {
