@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use log::{LevelFilter, error, info, warn};
 
 mod file;
+mod objects;
 mod protocol;
 
 struct BaseCommandHandler {

@@ -9,11 +9,11 @@
 //
 // The alternative is to use libgit2 to read the repository.
 
+use crate::objects::{ObjectType, read_object_from_file};
+use crate::protocol;
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::io::BufRead;
-
-use crate::protocol;
 
 pub struct FileBackedCommandHandler {
     remote_path: std::path::PathBuf,
@@ -180,43 +180,73 @@ impl protocol::Command for FileBackedCommandHandler {
     fn fetch_object(&self, hash: &str, name: &str) {
         // Fetch commands are sent in a batch, one per line, terminated with a blank line.
         // Outputs a single blank line when all fetch commands in the same batch are complete. Only objects which were reported in the output of list with a sha1 may be fetched this way.
-        let source_object = self
-            .remote_path
-            .join("objects")
-            .join(&hash[..2])
-            .join(&hash[2..]);
-        let destination_object_directory = self.local_path.join("objects");
-        let destination_object = destination_object_directory
-            .join(&hash[..2])
-            .join(&hash[2..]);
 
-        if source_object.is_file() {
-            // Found the object as a loose object.
-            info!(
-                "Fetching {} for '{}' - it was a loose object to {}",
-                hash,
-                name,
-                destination_object.display()
-            );
-            std::fs::create_dir_all(
-                destination_object
-                    .parent()
-                    .expect("Object path is sub-directory"),
-            )
-            .expect("TODO: Error handling");
+        let mut objects_to_fetch = vec![hash.to_string()];
+        while let Some(hash) = objects_to_fetch.pop() {
+            let source_object = self.remote_loose_object_path(hash.as_str());
+            if source_object.is_file() {
+                // Found the object as a loose object.
+                let destination_object = self.local_loose_object_path(hash.as_str());
+                if destination_object.is_file() {
+                    info!("Already fetched object: {}", hash);
+                    continue;
+                }
+                info!(
+                    "Fetching {} for '{}' - it was a loose object to {}",
+                    hash,
+                    name,
+                    destination_object.display()
+                );
 
-            // Ideally, the file would be hashed first to make sure its content matches its
-            // identity.
-            std::fs::copy(source_object, destination_object).expect("TODO: Error handling");
+                std::fs::create_dir_all(
+                    destination_object
+                        .parent()
+                        .expect("Object path is sub-directory"),
+                )
+                .expect("TODO: Error handling");
 
-            // TODO: Need to handle fetching its dependencies.
-        } else {
-            // Didn't find the object, it may be in a pack file.
-            info!(
-                "Fetching {} for '{}' - it was not a loose object..",
-                hash, name
-            );
-            todo!("Can't return the object yet.");
+                // Ideally, the file would be hashed first to make sure its content matches its
+                // identity.
+                std::fs::copy(source_object, destination_object.clone())
+                    .expect("TODO: Error handling");
+
+                let object = read_object_from_file(destination_object.clone())
+                    .expect("TODO: Error handling for IO");
+                match object {
+                    ObjectType::Unknown => {
+                        error!(
+                            "Unrecognised type of object in the git object store: {}",
+                            destination_object.display()
+                        );
+                    }
+                    ObjectType::Commit { tree, parents } => {
+                        // TODO: Not tested this yet.
+                        // if let Some(tree) = tree
+                        // {
+                        //     objects_to_fetch.push(tree);
+                        // }
+                        for parent in parents {
+                            objects_to_fetch.push(parent);
+                        }
+                    }
+                    ObjectType::Tree => {
+                        panic!("NYI - Fetching a tree");
+                    }
+                    ObjectType::Blob => {
+                        // Nothing is required here as a blob if a leaf and doesn't reference any
+                        // other objects.
+                    }
+                }
+
+                // TODO: Need to handle fetching its dependencies.
+            } else {
+                // Didn't find the object, it may be in a pack file.
+                info!(
+                    "Fetching {} for '{}' - it was not a loose object..",
+                    hash, name
+                );
+                //todo!("Can't return the object yet.");
+            }
         }
     }
 
