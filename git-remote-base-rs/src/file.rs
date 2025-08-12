@@ -1,6 +1,6 @@
 // Provides an implementation of the git-helper protocol using an existing repository.
 //
-// The implementation reads  and copies the appropriate files from an existing git repository on
+// The implementation reads and copies the appropriate files from an existing git repository on
 // disk.
 //
 // In this case, I'm using the https://gist.github.com/donno/34aeb93dbaefa13a0d6a41953a17c024 as
@@ -9,7 +9,7 @@
 //
 // The alternative is to use libgit2 to read the repository.
 
-use crate::objects::{ObjectType, read_object_from_file};
+use crate::objects::collect_references_from_loose_object;
 use crate::protocol;
 use log::{error, info, warn};
 use std::collections::HashMap;
@@ -70,6 +70,18 @@ impl FileBackedCommandHandler {
         buffer.read_line(&mut line)?;
         Ok(line.trim_end().to_string())
     }
+
+    // Write the hash of a remote reference.
+    //
+    // This is a case where using libgit2 would give better peace of mind.
+    fn write_remote_reference(&self, reference: &str, hash: &str) -> Result<(), std::io::Error> {
+        let mut file = std::fs::File::create(self.remote_path.join(reference))?;
+        file.write_all(hash.as_ref())
+    }
+
+    fn remote_has_loose_object(&self, hash: &str) -> bool {
+        let path = self.remote_loose_object_path(hash);
+        path.is_file()
     }
 }
 
@@ -210,34 +222,11 @@ impl protocol::Command for FileBackedCommandHandler {
                 std::fs::copy(source_object, destination_object.clone())
                     .expect("TODO: Error handling");
 
-                // TODO: handle error for below better than just ignoring it.
-                let object = read_object_from_file(destination_object.clone())
-                    .unwrap_or(ObjectType::Unknown {});
-                match object {
-                    ObjectType::Unknown => {
-                        error!(
-                            "Unrecognised type of object in the git object store: {}",
-                            destination_object.display()
-                        );
-                    }
-                    ObjectType::Commit { tree, parents } => {
-                        if let Some(tree) = tree {
-                            objects_to_fetch.push(tree);
-                        }
-                        for parent in parents {
-                            objects_to_fetch.push(parent);
-                        }
-                    }
-                    ObjectType::Tree { references } => {
-                        objects_to_fetch.extend(references);
-                    }
-                    ObjectType::Blob => {
-                        // Nothing is required here as a blob if a leaf and doesn't reference any
-                        // other objects.
-                    }
+                // Find the dependencies of this given object and fetch them.
+                match collect_references_from_loose_object(destination_object.clone()) {
+                    Ok(references) => objects_to_fetch.extend(references),
+                    Err(error) => todo!("Handle the error case: {}", error),
                 }
-
-                // TODO: Need to handle fetching its dependencies.
             } else {
                 // Didn't find the object, it may be in a pack file.
                 info!(
@@ -287,25 +276,88 @@ impl protocol::Command for FileBackedCommandHandler {
         //
         // This step could be good one to move into the caller of push() i.e. the protocol module as
         // reading the local repository will be common.
-        if let Ok(local_reference) = self.read_local_reference(source) {
+        if let Ok(hash) = self.read_local_reference(source) {
+            // The simple case is if the referenced object already exists upstream, in which case
+            // the reference file simply needs to be written.
+            //
+            // If force_update is true, then it simply overwrites it if its already there
+            // otherwise - it is involved.
+
             if force_update {
-                todo!(
-                    "TODO: Handle force pushing {} ({}) to {}.",
-                    source,
-                    local_reference,
-                    destination
-                );
-            } else {
-                todo!(
-                    "TODO: Handle pushing {} ({}) to {}.",
-                    source,
-                    local_reference,
-                    destination
-                );
+                todo!("TODO: Handle force pushing.");
             }
 
-        // The way git-remote-s3 faked this was it would simply call "git bundle create" and upload
-        // the entire thing, which is fine if you snapshotting.
+            // Handle pushing additional objects that are not on the remote.
+            let mut objects_to_push = vec![hash.to_string()];
+            let mut already_checked_objects = std::collections::HashSet::new();
+
+            while let Some(hash) = objects_to_push.pop() {
+                if already_checked_objects.contains(&hash.clone())
+                    || self.remote_has_loose_object(hash.as_str())
+                {
+                    // Assume if the remote has the object then it has all the ancestors.
+                    //
+                    // In practice since this pushes the first object it comes across first this
+                    // won't be true if the push is cancelled.
+                    already_checked_objects.insert(hash);
+                    continue;
+                }
+
+                let source_object = self.local_loose_object_path(hash.as_str());
+                if source_object.is_file() {
+                    info!(
+                        "Pushing {} for '{}' - it was a loose object ({})",
+                        hash,
+                        destination,
+                        source_object.display(),
+                    );
+
+                    let destination_object = self.remote_loose_object_path(hash.as_str());
+                    std::fs::create_dir_all(
+                        destination_object
+                            .parent()
+                            .expect("Object path is sub-directory"),
+                    )
+                    .expect("TODO: Error handling");
+
+                    std::fs::copy(source_object.clone(), destination_object)
+                        .expect("TODO: Error handling");
+
+                    match collect_references_from_loose_object(source_object.clone()) {
+                        Ok(references) => objects_to_push.extend(references),
+                        Err(error) => todo!("Handle the error case: {}", error),
+                    }
+                } else {
+                    // Similar to the fetch, simply copy all pack files to the remote.
+                    info!(
+                        "Pushing {} for '{}' - it was in a pack - all packs will be pushed",
+                        hash, destination,
+                    );
+
+                    // Quick and dirty copy all the packs for now.
+                    let local_pack_directory = self.local_path.join("objects").join("pack");
+                    let remote_pack_directory = self.remote_path.join("objects").join("pack");
+                    std::fs::create_dir_all(remote_pack_directory.clone())
+                        .expect("Directory all good.");
+                    let entries = std::fs::read_dir(local_pack_directory.clone()).unwrap();
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            std::fs::copy(
+                                entry.path(),
+                                remote_pack_directory.join(entry.file_name()),
+                            )
+                            .expect("TODO: Error handling");
+                        }
+                    }
+                }
+            }
+
+            info!("Writing reference '{}' with value {}", destination, hash);
+            self.write_remote_reference(destination, hash.as_str())
+                .expect("TODO: Handle IO errors");
+
+            // The way git-remote-s3 faked this was it would simply call "git bundle create" and
+            // upload the entire thing, which is fine if you snapshotting.
         } else {
             eprintln!("Failed to read reference: {}", source);
         }

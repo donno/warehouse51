@@ -49,6 +49,39 @@ pub fn read_object_from_file(path: std::path::PathBuf) -> Result<ObjectType, std
     Ok(read_object_header(&buffer).object_type)
 }
 
+// Return a list of the references to other objects given by the object at the given path.
+pub fn collect_references_from_loose_object(
+    path: std::path::PathBuf,
+) -> std::io::Result<Vec<String>> {
+    let mut found_references = Vec::new();
+    let object = read_object_from_file(path.clone())?;
+    match object {
+        ObjectType::Unknown => {
+            let reason = format!(
+                "Unrecognised type of object in the git object store: {}",
+                path.display()
+            );
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, reason));
+        }
+        ObjectType::Commit { tree, parents } => {
+            if let Some(tree) = tree {
+                found_references.push(tree);
+            }
+            for parent in parents {
+                found_references.push(parent);
+            }
+        }
+        ObjectType::Tree { references } => {
+            found_references.extend(references);
+        }
+        ObjectType::Blob => {
+            // Nothing is required here as a blob if a leaf and doesn't reference any
+            // other objects.
+        }
+    }
+    Ok(found_references)
+}
+
 fn read_prefixed_line(line: Option<&str>, expected_prefix: &str) -> Option<String> {
     if let Some(line) = line {
         if line.starts_with(expected_prefix) {

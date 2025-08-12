@@ -7,6 +7,47 @@ This one calls onto a git executable to read the example blobs.
 
 See https://git-scm.com/docs/gitremote-helpers for details.
 
+Testing
+-------
+
+Set the environment variable `GIT_SOURCE_DIRECTORY` to a directory containing
+the git repositories you want to use as the remotes.
+
+These are expected to have a working tree rather than bare.
+
+### Cloning
+
+`git clone base://git/<name>`
+
+Where `<name>` is the name of a directory in `$GIT_SOURCE_DIRECTORY`.
+
+### Pushing
+
+If you clone from above, then you can push back there with
+`git push origin <branch>`
+
+It is recommended that you do don't do this against a repository that is
+critical, as this is alpha software.
+
+The known limitation is if the objects are in a pack file that the remote
+doesn't know about.
+
+#### Complete push
+
+Create an empty 'remote' repository to test it with.
+```
+cd "$GIT_SOURCE_DIRECTORY"
+git init --bare base-push/.git
+```
+
+The reason it iss `base-push/.git` rather than `base-push.git` is simply because
+the implementation is simply expecting `.git` to be a subdirectory.
+
+```
+git remote add fresh base://git/base-push
+git push fresh main
+```
+
 Recently complete
 -----------------
 
@@ -14,6 +55,8 @@ Recently complete
   * Currently, all packs are downloaded.
 * Cloning a repository work - where it is cloned from already checked out
   repository.
+* Uploading every loose object needed during a push.
+  * Currently, all packs are uploaded if the object needed is not loose.
 
 TODOs
 -----
@@ -26,7 +69,8 @@ soon list.
   This is instead of copying every pack file. That said, it might still be good
   idea to copy the idx file for every pack that way its there and doesn't need
   to be fetched again when it is time to use the corresponding pack.
-* Handle push
+* Write handler for uses libgit2 to manage references in the local repository,
+  including on clone.
 
 Notes
 -----
