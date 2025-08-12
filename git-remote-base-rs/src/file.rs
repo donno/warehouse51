@@ -240,19 +240,10 @@ impl protocol::Command for FileBackedCommandHandler {
             }
         }
 
-        if let Some(cloning) = self.options.get("cloning") {
-            if cloning == "true" {
-                // Fetching cfe86ea53b653d62bfb5332a04877c563237ea69 for 'refs/heads/master'.
-                match self.local.write_reference(name, hash) {
-                    Ok(_) => {
-                        info!("Wrote reference '{}' with value {}", name, hash);
-                    }
-                    Err(error) => {
-                        error!("Unable to write reference '{}': {}", hash, error);
-                    }
-                }
-            }
-        }
+        // When cloning, the references for branches don't need to be written by the remote-helper.
+        //
+        // By default, all branches retrieved via the "list" command will be fetched and converted
+        // to their remote equivalent by git itself.
     }
 
     fn push(&self, source: &str, destination: &str, force_update: bool) {
