@@ -17,6 +17,7 @@ use log::{LevelFilter, error, info};
 mod file;
 mod objects;
 mod protocol;
+mod repo;
 
 struct BaseCommandHandler {
     options: HashMap<String, String>,

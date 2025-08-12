@@ -10,14 +10,14 @@
 // The alternative is to use libgit2 to read the repository.
 
 use crate::objects::collect_references_from_loose_object;
-use crate::protocol;
+use crate::{protocol, repo};
 use log::{error, info, warn};
 use std::collections::HashMap;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Error, Write};
 
 pub struct FileBackedCommandHandler {
     remote_path: std::path::PathBuf,
-    local_path: std::path::PathBuf,
+    local: repo::Repository,
     options: HashMap<String, String>,
 }
 
@@ -43,8 +43,7 @@ impl FileBackedCommandHandler {
 
         FileBackedCommandHandler {
             remote_path: source_path,
-            local_path: std::fs::canonicalize(destination_path)
-                .expect("Can't canonicalise the destination path"),
+            local: repo::Repository::new(destination_path),
             options: HashMap::new(),
         }
     }
@@ -53,22 +52,6 @@ impl FileBackedCommandHandler {
     fn remote_loose_object_path(&self, hash: &str) -> std::path::PathBuf {
         let object_directory = self.remote_path.join("objects");
         object_directory.join(&hash[..2]).join(&hash[2..])
-    }
-
-    fn local_loose_object_path(&self, hash: &str) -> std::path::PathBuf {
-        let destination_object_directory = self.local_path.join("objects");
-        destination_object_directory
-            .join(&hash[..2])
-            .join(&hash[2..])
-    }
-
-    // Read the hash of a local reference.
-    fn read_local_reference(&self, reference: &str) -> Result<String, std::io::Error> {
-        let file = std::fs::File::open(self.local_path.join(reference))?;
-        let mut buffer = std::io::BufReader::new(file);
-        let mut line = String::new();
-        buffer.read_line(&mut line)?;
-        Ok(line.trim_end().to_string())
     }
 
     // Write the hash of a remote reference.
@@ -87,15 +70,17 @@ impl FileBackedCommandHandler {
 
 impl Default for FileBackedCommandHandler {
     fn default() -> Self {
+        let local_path: std::path::PathBuf = match std::env::var_os("GIT_DIR") {
+            Some(path) => path.into(),
+            None => panic!("Environment variable $GIT_DIR not set"),
+        };
+
         FileBackedCommandHandler {
             remote_path: match std::env::var_os("GIT_SOURCE_DIRECTORY") {
                 Some(path) => path.into(),
                 None => panic!("Environment variable GIT_SOURCE_DIRECTORY not set"),
             },
-            local_path: match std::env::var_os("GIT_DIR") {
-                Some(path) => path.into(),
-                None => panic!("Environment variable $GIT_DIR not set"),
-            },
+            local: repo::Repository::new(local_path),
             options: HashMap::new(),
         }
     }
@@ -198,7 +183,7 @@ impl protocol::Command for FileBackedCommandHandler {
             let source_object = self.remote_loose_object_path(hash.as_str());
             if source_object.is_file() {
                 // Found the object as a loose object.
-                let destination_object = self.local_loose_object_path(hash.as_str());
+                let destination_object = self.local.loose_object_path(hash.as_str());
                 if destination_object.is_file() {
                     info!("Already fetched object: {}", hash);
                     continue;
@@ -242,7 +227,7 @@ impl protocol::Command for FileBackedCommandHandler {
                 // To save doing that, if there is only one pack file, it can simply copy that.
                 // Or quick and dirty copy all the packs for now.
                 let remote_pack_directory = self.remote_path.join("objects").join("pack");
-                let local_pack_directory = self.local_path.join("objects").join("pack");
+                let local_pack_directory = self.local.pack_directory();
                 std::fs::create_dir_all(local_pack_directory.clone()).expect("Directory all good.");
 
                 let entries = std::fs::read_dir(remote_pack_directory.clone()).unwrap();
@@ -258,14 +243,13 @@ impl protocol::Command for FileBackedCommandHandler {
         if let Some(cloning) = self.options.get("cloning") {
             if cloning == "true" {
                 // Fetching cfe86ea53b653d62bfb5332a04877c563237ea69 for 'refs/heads/master'.
-                let reference_path = self.local_path.join(name);
-                std::fs::create_dir_all(reference_path.parent().expect("Must have a parent"))
-                    .expect("Directory all good.");
-                if let Ok(mut file) = std::fs::File::create(reference_path.clone()) {
-                    file.write_all(hash.as_ref())
-                        .expect("NYI Error handling/reporting.");
-                } else {
-                    error!("Unable to write {} to {}", hash, reference_path.display());
+                match self.local.write_reference(name, hash) {
+                    Ok(_) => {
+                        info!("Wrote reference '{}' with value {}", name, hash);
+                    }
+                    Err(error) => {
+                        error!("Unable to write reference '{}': {}", hash, error);
+                    }
                 }
             }
         }
@@ -276,7 +260,7 @@ impl protocol::Command for FileBackedCommandHandler {
         //
         // This step could be good one to move into the caller of push() i.e. the protocol module as
         // reading the local repository will be common.
-        if let Ok(hash) = self.read_local_reference(source) {
+        if let Ok(hash) = self.local.read_reference(source) {
             // The simple case is if the referenced object already exists upstream, in which case
             // the reference file simply needs to be written.
             //
@@ -303,7 +287,7 @@ impl protocol::Command for FileBackedCommandHandler {
                     continue;
                 }
 
-                let source_object = self.local_loose_object_path(hash.as_str());
+                let source_object = self.local.loose_object_path(hash.as_str());
                 if source_object.is_file() {
                     info!(
                         "Pushing {} for '{}' - it was a loose object ({})",
@@ -335,11 +319,10 @@ impl protocol::Command for FileBackedCommandHandler {
                     );
 
                     // Quick and dirty copy all the packs for now.
-                    let local_pack_directory = self.local_path.join("objects").join("pack");
                     let remote_pack_directory = self.remote_path.join("objects").join("pack");
                     std::fs::create_dir_all(remote_pack_directory.clone())
                         .expect("Directory all good.");
-                    let entries = std::fs::read_dir(local_pack_directory.clone()).unwrap();
+                    let entries = std::fs::read_dir(self.local.pack_directory()).unwrap();
                     for entry in entries {
                         if let Ok(entry) = entry {
                             std::fs::copy(
@@ -368,21 +351,21 @@ impl protocol::Command for FileBackedCommandHandler {
         let false_string = "false".to_string();
         let cloning = self.options.get("cloning").unwrap_or(&false_string);
         if cloning == "true" {
-            let remote_refs = self
-                .local_path
-                .join("refs")
-                .join("remotes")
-                .join(remote_name.to_string());
-            std::fs::create_dir_all(remote_refs.clone()).expect("Directory all good.");
-
-            // Write the HEAD file for the remote.
-            if let Ok(mut file) = std::fs::File::create(remote_refs.join("HEAD")) {
-                // TODO: This branch name won't work if it contains main.
-                let contents = format!("ref: refs/remotes/{}/master", remote_name);
-                file.write_all(contents.as_ref())
-                    .expect("NYI Error handling/reporting.");
-            } else {
-                error!("Unable to write to HEAD file in {}", remote_refs.display());
+            // TODO: This branch name won't work if it contains main.
+            //
+            // Revisit writing branches when fetching / cloning as the problem is it creates
+            // local branches instead of ones in refs/remotes/<remote_name>.
+            let contents = format!("ref: refs/remotes/{}/master", remote_name);
+            match self.local.write_reference(
+                format!("refs/remotes/{}/HEAD", remote_name).as_str(),
+                contents.as_str(),
+            ) {
+                Ok(_) => {
+                    info!("Wrote HEAD reference with value {}", contents);
+                }
+                Err(error) => {
+                    error!("Unable to write HEAD reference: {}", error);
+                }
             }
         }
     }
