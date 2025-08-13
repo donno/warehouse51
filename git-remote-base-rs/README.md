@@ -69,7 +69,7 @@ soon list.
   This is instead of copying every pack file. That said, it might still be good
   idea to copy the idx file for every pack that way its there and doesn't need
   to be fetched again when it is time to use the corresponding pack.
-* Write handler for uses libgit2 to manage references in the local repository,
+* Write handler using libgit2 to manage references in the local repository,
   including on clone.
 
 Notes

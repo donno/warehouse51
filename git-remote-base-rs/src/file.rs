@@ -10,6 +10,7 @@
 // The alternative is to use libgit2 to read the repository.
 
 use crate::objects::collect_references_from_loose_object;
+use crate::repo::FilesToPush;
 use crate::{protocol, repo};
 use log::{error, info, warn};
 use std::collections::HashMap;
@@ -83,6 +84,12 @@ impl Default for FileBackedCommandHandler {
             local: repo::Repository::new(local_path),
             options: HashMap::new(),
         }
+    }
+}
+
+impl repo::HasObject for FileBackedCommandHandler {
+    fn has_object(&self, hash: &str) -> bool {
+        self.remote_has_loose_object(hash)
     }
 }
 
@@ -182,14 +189,14 @@ impl protocol::Command for FileBackedCommandHandler {
             let source_object = self.remote_loose_object_path(hash.as_str());
             if source_object.is_file() {
                 // Found the object as a loose object.
-                match self.local.write_loose_object_if_missing(hash.as_str(), source_object)
+                match self
+                    .local
+                    .write_loose_object_if_missing(hash.as_str(), source_object)
                 {
                     Ok(new) => {
-                        if new
-                        {
+                        if new {
                             info!("Fetched {} for '{}' - it was a loose object.", hash, name);
-                        }
-                        else {
+                        } else {
                             info!("Already fetched loose object: {}", hash);
                             continue;
                         }
@@ -200,7 +207,9 @@ impl protocol::Command for FileBackedCommandHandler {
                 }
 
                 // Find the dependencies of this given object and fetch them.
-                match collect_references_from_loose_object(self.local.loose_object_path(hash.as_str())) {
+                match collect_references_from_loose_object(
+                    self.local.loose_object_path(hash.as_str()),
+                ) {
                     Ok(references) => objects_to_fetch.extend(references),
                     Err(error) => todo!("Handle the error case: {}", error),
                 }
@@ -254,66 +263,42 @@ impl protocol::Command for FileBackedCommandHandler {
                 todo!("TODO: Handle force pushing.");
             }
 
-            // Handle pushing additional objects that are not on the remote.
-            let mut objects_to_push = vec![hash.to_string()];
-            let mut already_checked_objects = std::collections::HashSet::new();
+            let files_to_push = repo::find_objects_to_push(&self.local, hash.as_str(), self);
+            let remote_pack_directory = self.remote_path.join("objects").join("pack");
+            for to_push in files_to_push {
+                match to_push {
+                    FilesToPush::LooseObject { hash, path } => {
+                        info!(
+                            "Pushing {} for '{}' - it was a loose object ({})",
+                            hash,
+                            destination,
+                            path.display(),
+                        );
 
-            while let Some(hash) = objects_to_push.pop() {
-                if already_checked_objects.contains(&hash.clone())
-                    || self.remote_has_loose_object(hash.as_str())
-                {
-                    // Assume if the remote has the object then it has all the ancestors.
-                    //
-                    // In practice since this pushes the first object it comes across first this
-                    // won't be true if the push is cancelled.
-                    already_checked_objects.insert(hash);
-                    continue;
-                }
-
-                let source_object = self.local.loose_object_path(hash.as_str());
-                if source_object.is_file() {
-                    info!(
-                        "Pushing {} for '{}' - it was a loose object ({})",
-                        hash,
-                        destination,
-                        source_object.display(),
-                    );
-
-                    let destination_object = self.remote_loose_object_path(hash.as_str());
-                    std::fs::create_dir_all(
-                        destination_object
-                            .parent()
-                            .expect("Object path is sub-directory"),
-                    )
-                    .expect("TODO: Error handling");
-
-                    std::fs::copy(source_object.clone(), destination_object)
+                        let destination_object = self.remote_loose_object_path(hash.as_str());
+                        std::fs::create_dir_all(
+                            destination_object
+                                .parent()
+                                .expect("Object path is sub-directory"),
+                        )
                         .expect("TODO: Error handling");
 
-                    match collect_references_from_loose_object(source_object.clone()) {
-                        Ok(references) => objects_to_push.extend(references),
-                        Err(error) => todo!("Handle the error case: {}", error),
+                        std::fs::copy(path, destination_object).expect("TODO: Error handling");
                     }
-                } else {
-                    // Similar to the fetch, simply copy all pack files to the remote.
-                    info!(
-                        "Pushing {} for '{}' - it was in a pack - all packs will be pushed",
-                        hash, destination,
-                    );
-
-                    // Quick and dirty copy all the packs for now.
-                    let remote_pack_directory = self.remote_path.join("objects").join("pack");
-                    std::fs::create_dir_all(remote_pack_directory.clone())
-                        .expect("Directory all good.");
-                    let entries = std::fs::read_dir(self.local.pack_directory()).unwrap();
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            std::fs::copy(
-                                entry.path(),
-                                remote_pack_directory.join(entry.file_name()),
-                            )
-                            .expect("TODO: Error handling");
-                        }
+                    FilesToPush::PackFile { path } => {
+                        info!(
+                            "Copying {} to {}",
+                            path.display(),
+                            remote_pack_directory.display()
+                        );
+                        std::fs::create_dir_all(remote_pack_directory.clone())
+                            .expect("Directory all good.");
+                        std::fs::copy(
+                            path.clone(),
+                            remote_pack_directory
+                                .join(path.file_name().expect("Should have file name")),
+                        )
+                        .expect("TODO: Error handling");
                     }
                 }
             }
