@@ -103,7 +103,6 @@ impl protocol::Command for FileBackedCommandHandler {
     fn list_references(&self) -> Vec<protocol::Reference> {
         // Lists the refs, one per line, in the format "<value> <name> [<attr> ...]".
         //
-        // Fake for now.
         // Mock version could use "git for-each-ref" on real one and strip out the type.
         let mut references = Vec::new();
 
@@ -183,32 +182,25 @@ impl protocol::Command for FileBackedCommandHandler {
             let source_object = self.remote_loose_object_path(hash.as_str());
             if source_object.is_file() {
                 // Found the object as a loose object.
-                let destination_object = self.local.loose_object_path(hash.as_str());
-                if destination_object.is_file() {
-                    info!("Already fetched object: {}", hash);
-                    continue;
+                match self.local.write_loose_object_if_missing(hash.as_str(), source_object)
+                {
+                    Ok(new) => {
+                        if new
+                        {
+                            info!("Fetched {} for '{}' - it was a loose object.", hash, name);
+                        }
+                        else {
+                            info!("Already fetched loose object: {}", hash);
+                            continue;
+                        }
+                    }
+                    Err(error) => {
+                        error!("Failed to write loose object: {}", error);
+                    }
                 }
-                info!(
-                    "Fetching {} for '{}' - it was a loose object to {}",
-                    hash,
-                    name,
-                    destination_object.display()
-                );
-
-                std::fs::create_dir_all(
-                    destination_object
-                        .parent()
-                        .expect("Object path is sub-directory"),
-                )
-                .expect("TODO: Error handling");
-
-                // Ideally, the file would be hashed first to make sure its content matches its
-                // identity.
-                std::fs::copy(source_object, destination_object.clone())
-                    .expect("TODO: Error handling");
 
                 // Find the dependencies of this given object and fetch them.
-                match collect_references_from_loose_object(destination_object.clone()) {
+                match collect_references_from_loose_object(self.local.loose_object_path(hash.as_str())) {
                     Ok(references) => objects_to_fetch.extend(references),
                     Err(error) => todo!("Handle the error case: {}", error),
                 }

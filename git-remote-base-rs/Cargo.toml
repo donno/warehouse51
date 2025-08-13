@@ -3,6 +3,10 @@ name = "git-remote-base-rs"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "git-remote-base-rs"
+path = "src/main.rs"
+
 [dependencies]
 log = "0.4.27"
 simplelog = "0.12.2"

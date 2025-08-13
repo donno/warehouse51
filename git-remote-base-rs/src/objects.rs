@@ -132,7 +132,7 @@ fn read_tree_entry(data: &[u8]) -> Result<TreeEntry, String> {
 
 // Read the tree from an optional line.
 fn read_tree(line: Option<&str>) -> Option<String> {
-    return read_prefixed_line(line, FIELD_PREFIX_TREE);
+    read_prefixed_line(line, FIELD_PREFIX_TREE)
 }
 
 fn read_parents(mut lines: std::str::Lines) -> Vec<String> {

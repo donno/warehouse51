@@ -27,6 +27,31 @@ impl Repository {
         object_directory.join(&hash[..2]).join(&hash[2..])
     }
 
+    // Write a loose object into the object database based on an existing loose object on disk.
+    //
+    // Returns true if the object was written otherwise false if it already exists so no write was
+    // required.
+    pub fn write_loose_object_if_missing(
+        &self,
+        hash: &str,
+        source_object: std::path::PathBuf,
+    ) -> Result<bool, std::io::Error> {
+        let destination_object = self.loose_object_path(hash);
+        if destination_object.is_file() {
+            return Ok(false);
+        }
+
+        std::fs::create_dir_all(destination_object.parent().expect("Object path is sub-directory"))?;
+
+        // Ideally, the file would be hashed first to make sure its content matches its
+        // identity.
+        match std::fs::copy(source_object, destination_object.clone())
+        {
+            Ok(_) => Ok(true),
+            Err(error) => Err(error),
+        }
+    }
+
     // Read the hash contained within a reference in the repository.
     pub fn read_reference(&self, reference: &str) -> Result<String, std::io::Error> {
         let file = std::fs::File::open(self.path.join(reference))?;
