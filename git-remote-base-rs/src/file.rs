@@ -13,7 +13,7 @@ use crate::objects::collect_references_from_loose_object;
 use crate::{protocol, repo};
 use log::{error, info, warn};
 use std::collections::HashMap;
-use std::io::{BufRead, Error, Write};
+use std::io::{BufRead, Write};
 
 pub struct FileBackedCommandHandler {
     remote_path: std::path::PathBuf,
@@ -339,6 +339,17 @@ impl protocol::Command for FileBackedCommandHandler {
 
     fn finalisation(&self, remote_name: String) {
         // Write the refs/remotes/<name>/HEAD file if cloning.
+        //
+        // This points to the HEAD branch, so the caller doesn't need to say --branch main or
+        // --branch master to say which is the head branch.
+        //
+        // This could perhaps be moved to fetch if the branch referred to HEAD is fetched.
+        //
+        // TODO: The following doesn't work,
+        // When cloning git still shows:
+        // - warning: remote HEAD refers to nonexistent ref, unable to checkout.
+        // The workaround is to provide --branch.
+
         let false_string = "false".to_string();
         let cloning = self.options.get("cloning").unwrap_or(&false_string);
         if cloning == "true" {
@@ -346,18 +357,35 @@ impl protocol::Command for FileBackedCommandHandler {
             //
             // Revisit writing branches when fetching / cloning as the problem is it creates
             // local branches instead of ones in refs/remotes/<remote_name>.
-            let contents = format!("ref: refs/remotes/{}/master", remote_name);
-            match self.local.write_reference(
-                format!("refs/remotes/{}/HEAD", remote_name).as_str(),
-                contents.as_str(),
-            ) {
-                Ok(_) => {
-                    info!("Wrote HEAD reference with value {}", contents);
+            match read_reference(self.remote_path.join("HEAD")) {
+                Ok(contents) => {
+                    let adjusted_contents =
+                        contents.replace("/heads/", format!("/remotes/{}/", remote_name).as_str());
+
+                    match self.local.write_reference(
+                        format!("refs/remotes/{}/HEAD", remote_name).as_str(),
+                        adjusted_contents.as_str(),
+                    ) {
+                        Ok(_) => {
+                            info!("Wrote HEAD reference with value {}", adjusted_contents);
+                        }
+                        Err(error) => {
+                            error!("Unable to write HEAD reference: {}", error);
+                        }
+                    }
                 }
                 Err(error) => {
-                    error!("Unable to write HEAD reference: {}", error);
+                    error!("Unable to determine HEAD reference of remote: {}", error);
                 }
             }
         }
     }
+}
+
+fn read_reference(reference_file: std::path::PathBuf) -> Result<String, std::io::Error> {
+    let file = std::fs::File::open(reference_file)?;
+    let mut buffer = std::io::BufReader::new(file);
+    let mut line = String::new();
+    buffer.read_line(&mut line)?;
+    Ok(line.trim_end().to_string())
 }
