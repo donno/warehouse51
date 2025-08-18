@@ -108,6 +108,9 @@ pub enum FilesToPush {
 pub trait HasObject {
     // Return true if the repository has object with the given hash.
     fn has_object(&self, hash: &str) -> bool;
+
+    // Return true if the repository has pack file with the given name.
+    fn has_pack_file(&self, name: &str) -> bool;
 }
 
 //type CheckHash = fn(&str) -> bool;
@@ -171,7 +174,10 @@ pub fn find_objects_to_push(
         let entries = std::fs::read_dir(source.pack_directory()).unwrap();
         for entry in entries {
             if let Ok(entry) = entry {
-                objects_missing.push(FilesToPush::PackFile { path: entry.path() });
+                if ! remote.has_pack_file(&entry.file_name().into_string().expect("UTF-8"))
+                {
+                    objects_missing.push(FilesToPush::PackFile { path: entry.path() });
+                }
             }
         }
     }

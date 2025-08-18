@@ -91,6 +91,11 @@ impl repo::HasObject for FileBackedCommandHandler {
     fn has_object(&self, hash: &str) -> bool {
         self.remote_has_loose_object(hash)
     }
+
+    fn has_pack_file(&self, name: &str) -> bool {
+        let pack_path = self.remote_path.join("pack").join(name);
+        pack_path.is_file()
+    }
 }
 
 fn read_lines<P>(filename: P) -> std::io::Result<std::io::Lines<std::io::BufReader<std::fs::File>>>

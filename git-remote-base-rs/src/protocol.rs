@@ -40,9 +40,9 @@ pub trait Command {
     // Sets the transport helper option <name> to <value>.
     fn set_option(&mut self, name: &str, value: &str) -> SetOptionResult;
 
-    // Lists the refs, one per line, in the format "<value> <name> [<attr> ...]"
-    // TODO: Consider changing this so the function doesn't have to print out
-    // the items and instead it returns either the sequence of references.
+    // Lists the references.
+    //
+    // The output is one per line, in the format "<value> <name> [<attr> ...]".
     fn list_references(&self) -> Vec<Reference>;
 
     // Fetches the given object, writing the necessary objects to the database.
