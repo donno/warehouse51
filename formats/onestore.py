@@ -897,6 +897,54 @@ class DataSignatureGroupDefinitionFND:
 
 # The classes that follow are from 2.6 Other Structures in [MS-ONESTORE]
 
+class PropertyType(enum.IntEnum):
+    NO_DATA = 0x1
+    """The property contains no data."""
+    BOOL = 0x2
+    """The property is a Boolean value specified by boolValue."""
+
+    ONE_BYTE_OF_DATA = 0x3
+    """The property contains 1 byte of data in the data field of PropertySet.
+    """
+
+    TWO_BYTES_OF_DATA = 0x4
+    """The property contains 2 bytes of data in the data field of PropertySet.
+    """
+
+    FOUR_BYTES_OF_DATA = 0x5
+    """The property contains 4 bytes of data in the data field of PropertySet.
+    """
+
+    EIGHT_BYTES_OF_DATA = 0x6
+    """The property contains 8 bytes of data in the data field of PropertySet.
+    """
+
+    FOUR_BYTE_LENGTH_THEN_DATA = 0x7
+    """The property starts with 4 byt for the length and then the data.
+    """
+
+    OBJECT_ID = 0x8
+    """The property contains one CompactID in the body of the
+    ObjectSpaceObjectPropSet.OIDs stream field.
+    """
+
+    OBJECT_ID_ARRAY = 0x9
+    """The property contains an array of COmpactID in teh body field.
+
+    The property contains unsigned integer of 4 bytes that specific the
+    number of CompactIDs that is contained within the properly.
+    """
+
+    OBJECT_SPACE_ID = 0xA
+    """The property contains one CompactID structure in the
+    ObjectSpaceObjectPropSet.OSIDs.body stream field.
+    """
+
+    OBJECT_SPACE_ID_ARRAY = 0xA
+    """The property contains an array of CompactID structures in the ObjectSpaceObjectPropSet.OSIDs.body stream field. The property contains an unsigned integer of size 4 bytes in the PropertySet.rgData stream field that specifies the number of CompactID structures this property contains.
+    """
+
+
 @dataclasses.dataclass
 class PropertyID:
     """Specifies the format of a property set
@@ -909,6 +957,7 @@ class PropertyID:
 
     The meanings of the id field values are specified in [MS-ONE] section
     2.1.12.
+    https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-one/73d98105-f194-4c05-a795-09840a6d24bf
 
     This is a 26-bit integer.
     """
