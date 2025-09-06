@@ -42,7 +42,11 @@ def from_popular_baby_names() -> collections.Counter:
 
     counter = collections.Counter()
 
-    with zipfile.ZipFile("baby-names-1944-2013.zip") as archive:
+    archive_path = pathlib.Path(__file__).parent / "baby-names-1944-2013.zip"
+    if not archive_path.is_file():
+        archive_path = pathlib.Path.cwd() / archive_path.name
+
+    with zipfile.ZipFile(archive_path) as archive:
         for info in archive.infolist():
             path = pathlib.PurePath(info.filename)
             if path.suffix == ".csv":
@@ -72,7 +76,12 @@ def surnames(adjust_style: bool = True) -> collections.Counter:
     """
 
     counter = collections.Counter()
-    with open("deceased-estates.csv", encoding="utf-8") as reader:
+
+    csv_path = pathlib.Path(__file__).parent / "deceased-estates.csv"
+    if not csv_path.is_file():
+        csv_path = pathlib.Path.cwd() / csv_path.name
+
+    with csv_path.open("r", encoding="utf-8") as reader:
         csv_reader = csv.DictReader(reader)
         for record in csv_reader:
             surname = record["Surname"]
