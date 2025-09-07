@@ -51,13 +51,10 @@ Where employee is: (See EmployeeJson)
     "email": "john.smith@company.example",
     "groups": ["management"],
 }
-
-To Do
------
-* Implement the group assignment.
 """
 
 import argparse
+import bisect
 import collections
 import itertools
 import json
@@ -68,6 +65,35 @@ from name_people import generate_user_names
 from name_company import Company, generate_companies
 
 
+# Ideally, this should cover more "role" and "department", but for now lets go
+# with this simplified view.
+GROUPS_BY_SIZE = {
+    30: [
+        ("senior", 2), ("manager", 2), ("clerk", 16),
+    ],
+    50: [
+        ("junior", 8), ("specialist", 10), ("senior", 4), ("manager", 3),
+    ],
+    200: [
+        ("junior generalist", 20),
+        ("specialist A", 10),
+        ("specialist B", 10),
+        ("specialist C", 10),
+        ("specialist D", 10),
+        ("senior specialist A", 4),
+        ("senior specialist B", 4),
+        ("senior specialist C", 4),
+        ("senior specialist D", 4),
+        ("department head A", 2),
+        ("department head B", 2),
+        ("department head C", 2),
+        ("department head D", 2),
+        ("head of operations", 6),
+        ("team manager", 5),
+        ("executive manager", 3),
+    ],
+}
+
 class EmployeeJson(typing.TypedDict):
     """Represent an employee in JSON as a Python dictionary."""
 
@@ -75,6 +101,8 @@ class EmployeeJson(typing.TypedDict):
     last_name: str
     email: str
     group: list[str]
+    """The name of the groups that the employee is a part of at their company.
+    """
 
 
 class CompanyJson(typing.TypedDict):
@@ -91,6 +119,9 @@ class CompanyJson(typing.TypedDict):
 
     employees: list[EmployeeJson]
     """The employees that work at the company."""
+
+    groups: list[str]
+    """The name of the groups (or roles) used at the company."""
 
 
 def expand(opening_range, repeat_count: int) -> list[int]:
@@ -207,6 +238,21 @@ def assign_people_to_company(company_count: int, employee_count: int) -> list[in
     )
 
 
+def assign_people_to_groups(head_count: int) -> list[str]:
+    """Assign employees to the company to groups essentially a role.."""
+    size_to_groups = list(GROUPS_BY_SIZE.items())
+    group_index = bisect.bisect_left(
+        size_to_groups, head_count, key=lambda item: item[0],
+    )
+    group_index = min(group_index, len(GROUPS_BY_SIZE) - 1)
+    print('Group index', group_index)
+    group_for_size = size_to_groups[group_index][1]
+    print(group_for_size)
+    names, weights = zip(*group_for_size)
+    print(weights)
+    return random.choices(names, weights=weights, k=head_count)
+
+
 def new_parser() -> argparse.ArgumentParser:
     """Return an argument parser for tool for generating users."""
     parser = argparse.ArgumentParser(description="Generate user information.")
@@ -230,6 +276,7 @@ def new_parser() -> argparse.ArgumentParser:
     return parser
 
 
+
 def generate_full_description(
     companies: list[Company],
     users: list[tuple[str, str]],
@@ -242,20 +289,28 @@ def generate_full_description(
 
     company_to_people = {}
     for person_index, company_index in enumerate(person_to_company):
-        # Since the mapping is not done seperately, rather than use index like
+        # Since the mapping is not done separately, rather than use index like
         # below, sub in the actual user.
         # company_to_people.setdefault(company_index, []).append(person_index)
         company_to_people.setdefault(company_index, []).append(users[person_index])
+
+    company_to_groups_for_people = {}
+    for company_index, people in company_to_people.items():
+        company_to_groups_for_people[company_index] = assign_people_to_groups(
+            len(people),
+        )
 
     def convert_person(
         first_name: str,
         last_name: str,
         company: Company,
+        group: str,
     ) -> EmployeeJson:
         return {
             "first_name": first_name,
             "last_name": last_name,
             "email": company.email_for_user(first_name, last_name, 0),
+            "groups": [group],
         }
 
     def make_email_unique(company: CompanyJson):
@@ -273,14 +328,18 @@ def generate_full_description(
                 employee["email"] = email
             seen_emails.add(email)
 
-    def convert_company(company: Company, employees: list) -> CompanyJson:
+    def convert_company(company: Company,
+                        employees: list,
+                        employee_to_groups: list[str]) -> CompanyJson:
         company: CompanyJson = {
             "name": company.name,
             "domain": company.domain,
             "user_name_style": company.user_name_style.name,
+            "groups": list(set(employee_to_groups)),
             "employees": [
-                convert_person(first_name, last_name, company)
-                for first_name, last_name in employees
+                convert_person(first_name, last_name, company, group)
+                for (first_name, last_name), group in zip(employees,
+                                                          employee_to_groups)
             ],
         }
         make_email_unique(company)
@@ -288,7 +347,8 @@ def generate_full_description(
 
     return {
         "companies": [
-            convert_company(company, company_to_people[index])
+            convert_company(company, company_to_people[index],
+                            company_to_groups_for_people[index])
             for index, company in enumerate(companies)
         ],
     }
