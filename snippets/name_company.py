@@ -70,6 +70,8 @@ class Company:
         The caller will need to check if there are two people with same
         email and generate unique name for the subsequent people.
         """
+        first_name = first_name.replace(" ", "_")
+        last_name = last_name.replace(" ", "_").replace("'", "")
         match self.user_name_style:  # Historic moment - my first match in Py.
             case UserNameStyle.FIRST_DOT_LAST:
                 return f"{first_name}.{last_name}@{self.domain}".lower()
