@@ -61,7 +61,7 @@ class Company:
     This with the domain is used to determine the email address of an employee.
     """
 
-    head_count: int
+    head_count: int = 0
     """The number of people employed by the company."""
 
     def email_for_user(self, first_name: str, last_name: str, employee_id: int) -> str:
@@ -69,6 +69,20 @@ class Company:
 
         The caller will need to check if there are two people with same
         email and generate unique name for the subsequent people.
+
+        Examples
+        --------
+        >>> args = ["John", "Smith", 1234]
+        >>> Company("test", "test.example", UserNameStyle.FIRST_DOT_LAST).email_for_user(*args)
+        'john.smith@test.example'
+        >>> Company("test", "test.example", UserNameStyle.F_LAST).email_for_user(*args)
+        'jsmith@test.example'
+        >>> Company("test", "test.example", UserNameStyle.F_3_DOT_LAST).email_for_user(*args)
+        'joh.smith@test.example'
+        >>> Company("test", "test.example", UserNameStyle.FOUR_AND_FOUR).email_for_user(*args)
+        'johnsmit@test.example'
+        >>> Company("test", "test.example", UserNameStyle.EMPLOYEE_ID).email_for_user(*args)
+        'e1234@test.example'
         """
         first_name = first_name.replace(" ", "_")
         last_name = last_name.replace(" ", "_").replace("'", "")
@@ -80,7 +94,7 @@ class Company:
             case UserNameStyle.F_3_DOT_LAST:
                 return f"{first_name[:3]}.{last_name}@{self.domain}".lower()
             case UserNameStyle.FOUR_AND_FOUR:
-                return f"{first_name[:4]}{last_name:4}@{self.domain}".lower()
+                return f"{first_name[:4]}{last_name[:4]}@{self.domain}".lower()
             case UserNameStyle.EMPLOYEE_ID:
                 return f"e{employee_id}@{self.domain.lower()}"
         raise NotImplementedError
