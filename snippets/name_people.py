@@ -21,11 +21,13 @@ def adjust_name_style(name):
     """
     if name.endswith(" ?"):
         name = name[:-2]
+    if name.startswith("?"):
+        name = name[1:]
     if name.startswith("MC "):
         return "Mc" + name[3:].title()
     if name.startswith("O "):
         return "O'" + name[2:].title()
-    return name.title()
+    return name.strip("'").title()
 
 
 def from_popular_baby_names() -> collections.Counter:
@@ -55,7 +57,7 @@ def from_popular_baby_names() -> collections.Counter:
                 ) as reader:
                     csv_reader = csv.DictReader(reader)
                     for record in csv_reader:
-                        if record["Given Name"] == "UNNAMED":
+                        if record["Given Name"] in ("UNNAMED", "(NOT"):
                             continue
 
                         name = adjust_name_style(record["Given Name"])
@@ -87,7 +89,8 @@ def surnames(adjust_style: bool = True) -> collections.Counter:
             surname = record["Surname"]
             if adjust_style:
                 surname = adjust_name_style(surname)
-            counter[surname] += 1
+            if surname:
+                counter[surname] += 1
     return counter
 
 
