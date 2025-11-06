@@ -41,6 +41,19 @@ ThingRecord = typing.TypedDict(
     },
 )
 
+ContextRecord = typing.TypedDict(
+    "ContextRecord",
+    {
+        "Thing ID": str,
+        "Date": str,  # TODO: Consider parsing this to datetime.
+        "Category": str,
+        "Sub-category": str,
+        "Name": str,
+        "Author": str,
+        "License": str,
+    },
+)
+
 
 def things(
     cache: pathlib.Path = WORKING_DIRECTORY,
@@ -80,6 +93,29 @@ def things(
             if filter_out(record):
                 continue
 
+            yield record
+
+
+def things_context(
+    cache: pathlib.Path = WORKING_DIRECTORY,
+) -> collections.abc.Generator[ContextRecord, None, None]:
+    """Lists the things from the context file.
+
+    Example
+    >>> thing_id_to_context = {
+    ...    thing["Thing ID"]: thing for thing in things_context()
+    ... }
+    """
+    csv_path = cache / "Thingi10K_contextual_data.csv"
+
+    if not csv_path.exists():
+        urllib.request.urlretrieve(
+            "https://huggingface.co/datasets/Thingi10K/Thingi10K/raw/main/metadata/contextual_data.csv",
+            csv_path,
+        )
+
+    with csv_path.open("r") as reader:
+        for record in csv.DictReader(reader):
             yield record
 
 
