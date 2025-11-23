@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <title>Bacon Factor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { background: #292A2E; color: #DDDEE1; margin: 0px }
+
+      h1, h2 { color: #92c5f9; }
+      h1 { text-align: center; }
+      .parent {
+        display: grid;
+        grid-template-columns: 1fr 3fr 1fr;
+        grid-column-gap: 2em;
+        justify-items: stretch;
+        align-items: stretch;
+        height: 100vh;
+
+      }
+
+      .sides {
+        height: 100vh;
+        background: #13171f;
+        padding-left: 2em;
+        padding-right: 2em;
+        /*overflow-y: scroll;*/
+          overflow-y: auto;
+      }
+
+      .sides ul {
+        padding: 1em;
+        list-style: none;
+      }
+
+      .sides li {
+        padding: 1em;
+        list-style: none;
+      }
+
+      .show span {
+        font-weight: bolder;
+      }
+
+      .sides li button {
+          background-color: #292A2E;
+          width: 100%;
+          border: none;
+          color: white;
+          padding: 15px 32px;
+          text-align: center;
+          text-decoration: none;
+          display: inline-block;
+          font-size: 16px;
+          cursor: pointer;
+      }
+
+      .sides li button:active {
+            transform: scale(1.02, 1.10);
+            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+        }
+
+      .sides li:hover {
+        background: #E5E9F640;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Possibly add a heading row / nav bar across top and a footer across bottom -->
+    <div class="parent">
+      <div class="sides">
+        <h2>Start</h2>
+        <!-- TODO: Add a input field to let user type / filter the results. -->
+        <label for="name">Filter:</label>
+        <input type="text" id="start" name="name" maxlength="255" />
+        <ul id="start-shows"></ul>
+        <ul id="left-choice"></ul>
+      </div>
+      <div class="main">
+        <h1>Bacon Factor</h1>
+        <p>Connect two TV shows together, using the actors that appear in them.</p>
+        <p>Select a show to start with and a show to end at.</p>
+        <div id="automated">
+          <!-- this is where the canvas-like area is -->
+        </div>
+        <div id="zone">
+          <!-- this is where the canvas-like area is -->
+        </div>
+      </div>
+      <div class="sides">
+        <h2>End</h2>
+        <label for="endname">Filter:</label>
+        <input type="text" id="end" name="endname" maxlength="255" />
+        <ul id="end-shows"></ul>
+        <ul id="right-choice"></ul>
+      </div>
+    </div>
+    <script type="module">
+      import { actorNames, titleNames } from "./names.generated.js";
+      import { loadData, findSequenceByIndices, resolveSequence } from "./baconfactor.js";
+
+      function setupTitles(titles)
+      {
+        var withIndices = titles.map((title, index) => { return {"name": title, "index": index, "lower": title.toLowerCase()}; });
+        withIndices.sort((a, b) => a.name < b.name );
+        return withIndices;
+      };
+
+      const sortedTitles = setupTitles(titleNames);
+
+      function choices(sequence)
+      {
+          if ((sequence.length & 1) === 0)
+          {
+            // Show.
+            const showIndices = state.data.showsForActors(sequence.at(-1));
+            var shows = [];
+            showIndices.forEach(index => {
+              shows.push({
+                "name": state.data.showName(index),
+                "index": index,
+              });
+            });
+            return shows;
+          }
+
+          // Actor / person.
+          const actorIndices = state.data.actorsInShows(sequence.at(-1));
+          var actors = [];
+          actorIndices.forEach(index => {
+            actors.push({
+              "name": state.data.actorName(index),
+              "index": index,
+            });
+          });
+
+          return actors
+      }
+
+      function renderZone()
+      {
+        // Render the state into the zone.
+        var body = "";
+        if (state.start !== null)
+        {
+          var showName = titleNames[state.start];
+          body = "Starting with show <span class=\"show\">" + showName + "</span>.";
+
+          state.fromStart.forEach((index, position) => {
+            if ((position & 1) === 0)
+            {
+              body += "<br>" + state.data.showName(index);
+            }
+            else
+            {
+              body += "<br>" + state.data.actorName(index);
+            }
+          });
+
+          // Update the lists on the left.
+          document.getElementById("left-choice").innerHTML = "<li>" + toLinks(choices(state.fromStart), "bfSelectLeft").join("<li>");
+        }
+
+        body += "<br><hr>";
+
+        const targetPosition = state.fromEnd.length & 1;
+        state.fromEnd.slice().reverse().forEach((index, position) => {
+          if ((position & 1) === targetPosition)
+          {
+            body += "<br>" + state.data.actorName(index);
+          }
+          else
+          {
+            body += "<br>" + state.data.showName(index);
+          }
+        });
+
+        if (state.end !== null)
+        {
+          var showName = titleNames[state.end];
+          body += "<br>Ending at show <span class=\"show\">" + showName + "</span>";
+
+          // Update the lists on the right.
+          document.getElementById("right-choice").innerHTML = "<li>" + toLinks(choices(state.fromEnd), "bfSelectRight").join("<li>");
+        }
+        document.getElementById("zone").innerHTML = body;
+      }
+
+      var state = {
+        "start": null,
+        "end": null,
+        "fromStart": [],
+        "fromEnd": [],
+        "data": null,
+      };
+
+      function selectStart(index)
+      {
+        state.start = index;
+        state.fromStart.push(index);
+
+        // Update the UI.
+        var content = `<button>${titleNames[index]}</button>`;
+        content += `<li><button onclick="bfClearStart()">Clear start</button>`;
+        document.getElementById("start-shows").innerHTML = "<li>" + content;
+        renderZone();
+        if (state.start !== null && state.end !== null)
+        {
+          solve(state.start, state.end);
+        }
+      }
+
+      function selectEnd(index)
+      {
+        state.end = index;
+        state.fromEnd.push(index);
+
+        // Update the UI.
+        var content = `<button>${titleNames[index]}</button>`;
+        content += `<li><button onclick="bfClearEnd()">Clear start</button>`;
+        document.getElementById("end-shows").innerHTML = "<li>" + content;
+        renderZone();
+        if (state.start !== null && state.end !== null)
+        {
+          solve(state.start, state.end);
+        }
+      }
+
+      function solve(start, end)
+      {
+        loadData().then((data) => {
+          const sequence = findSequenceByIndices(start, end, data);
+          const resolvedSequence = resolveSequence(sequence, data);
+          const content = resolvedSequence.join("<li>");
+          document.getElementById('automated').innerHTML = "<ol><li>" + content + "</ol>";
+        });
+      }
+
+      window.bfSelectStart = selectStart;
+      window.bfSelectEnd = selectEnd;
+      window.bfClearStart = function() {
+        state.start = null;
+        state.fromStart = [];
+
+        var keyword = document.getElementById("start").value.toLowerCase();
+        let titles = keyword.length ? sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 ) : sortedTitles;
+        document.getElementById("start-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectStart").join("<li>");
+        document.getElementById("left-choice").innerHTML = "";
+      };
+      window.bfClearEnd = function() {
+        state.end = null;
+        state.fromEnd = [];
+
+        var keyword = document.getElementById("end").value.toLowerCase();
+        let titles = keyword.length ? sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 ) : sortedTitles;
+        document.getElementById("end-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectEnd").join("<li>");
+        document.getElementById("right-choice").innerHTML = "";
+      };
+      window.bfSelectLeft = function(index) {
+        state.fromStart.push(index);
+        renderZone();
+      }
+      window.bfSelectRight = function(index) {
+        state.fromEnd.push(index);
+        renderZone();
+      }
+
+      function toLinks(titles, callback) {
+        if (titles.length === 0)
+        {
+          return ["No data available."];
+        }
+        var where = "start";
+        return titles.map(element => {
+          return `<button onclick="${callback}(${element.index})">${element.name}</button>`;
+        });
+      };
+
+      window.bfClearStart();
+      window.bfClearEnd();
+
+      loadData().then((data) => {
+          state.data = data;
+
+          document.getElementById("start").addEventListener("input", (event) => {
+            const keyword = event.target.value.toLowerCase();
+            let titles = sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 );
+            document.getElementById("start-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectStart").join("<li>");
+          });
+          document.getElementById("end").addEventListener("input", (event) => {
+            const keyword = event.target.value.toLowerCase();
+            let titles = sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 );
+            document.getElementById("end-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectEnd").join("<li>");
+          });
+      });
+
+    </script>
+  </body>
+</html>
