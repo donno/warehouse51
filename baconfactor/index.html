@@ -283,15 +283,18 @@
           state.data = data;
 
           document.getElementById("start").addEventListener("input", (event) => {
+            if (state.fromStart.length > 0) return;
             const keyword = event.target.value.toLowerCase();
             let titles = sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 );
             document.getElementById("start-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectStart").join("<li>");
           });
           document.getElementById("end").addEventListener("input", (event) => {
+            if (state.fromEnd.length > 0) return;
             const keyword = event.target.value.toLowerCase();
             let titles = sortedTitles.filter((element, index) => element.lower.indexOf(keyword) != -1 );
             document.getElementById("end-shows").innerHTML = "<li>" + toLinks(titles, "bfSelectEnd").join("<li>");
           });
+      });
       });
 
     </script>
