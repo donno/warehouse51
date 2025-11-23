@@ -217,7 +217,7 @@
 
         // Update the UI.
         var content = `<button>${titleNames[index]}</button>`;
-        content += `<li><button onclick="bfClearEnd()">Clear start</button>`;
+        content += `<li><button onclick="bfClearEnd()">Clear end</button>`;
         document.getElementById("end-shows").innerHTML = "<li>" + content;
         renderZone();
         if (state.start !== null && state.end !== null)
