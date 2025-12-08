@@ -326,6 +326,8 @@ def generate_full_description(
                 extra = random.randint(10, 200)
                 email = f"{local_part}{extra}@{host}"
                 employee["email"] = email
+
+            assert ' ' not in email
             seen_emails.add(email)
 
     def convert_company(company: Company,
