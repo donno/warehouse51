@@ -11,6 +11,7 @@ import importlib
 import inspect
 import pathlib
 import pkgutil
+import string
 
 # AV is the AliceVision specific command lines.
 # There is also CommandLineNode which is generic.
@@ -100,10 +101,42 @@ def alice_commands() -> collections.abc.Generator[Command]:
     yield from commands(modules(SCRIPT_DIRECTORY / PACKAGE_NAME))
 
 
+def parameters_for_command_line(command: Command) -> list:
+    """Determine the parameters required for a the command line of a command."""
+    return _parameters_for_command_line(command.raw.commandLine)
+
+
+def _parameters_for_command_line(command_line: str) -> list:
+    """Determine the parameters referred to by the command line.
+
+    Examples
+    --------
+    >>> _parameters_for_command_line("hello {name}")
+    ['name']
+    >>> _parameters_for_command_line("example --size={size} --cores={cores}")
+    ['size', 'cores']
+    """
+    parameters = []
+    parsed_format = string.Formatter().parse(command_line)
+    for literal_text, field_name, format_spec, conversion in parsed_format:
+        if conversion is not None:
+            # This case may need to be handled once there is an example of it.
+            raise ValueError("Expected conversion to be None.")
+        if format_spec:
+            # This case may need to be handled once there is an example of it.
+            raise ValueError("Expected format_spec to be None.")
+        if field_name:
+            parameters.append(field_name)
+    return parameters
+
+
 def main() -> None:
     """Output a summary of each command found in the aliceVision package."""
     for command in alice_commands():
         print(f"{command}\n{'=' * 32}")
+
+        # Test parameters_for_command_line with every command.
+        _ = parameters_for_command_line(command)
 
 
 if __name__ == "__main__":
