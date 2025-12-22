@@ -1,0 +1,2 @@
+# This assumes you have read and accept: https://www.minecraft.net/en-us/eula
+eula=true
