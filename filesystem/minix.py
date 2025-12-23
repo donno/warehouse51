@@ -48,6 +48,15 @@ Disk layout
 - ...
 - data zones  (zone count - first data size) <<< log_zone_size.
 
+TODO
+- Add a walk function to walk over the entire file system, similar to os.walk()
+- Modify/write to the file system.
+- Write a tool that converted a `tar` to a Minix formatted disk image.
+- Separate block handling / device handling out - i.e. try a more layered
+  approach
+- Implement fsspec over which provides a more common interface over it the
+  higher level file system interface. Think of it as pathlib but for the IO.
+- Handle indirect and second-level indirect files.
 """
 
 import enum
@@ -388,6 +397,80 @@ class LoadedSystem:
 
         return Directory(inode, entries)
 
+    def _path_to_inode(self, path: pathlib.PurePosixPath) -> IndexNode:
+        if not path.is_absolute():
+            raise ValueError("Relative paths is NYI or supported.")
+
+        assert path.parts[0] == "/", "Only absolute paths are supported"
+        parts = path.parts[1:]
+        current_node = self.root_inode
+        path_so_far = pathlib.PurePosixPath("/")
+        for part in parts:
+            children = self.read_directory(current_node).entries
+            path_so_far = path_so_far / part
+            try:
+                part_inode_number = next(
+                    child.inode_number
+                    for child in children
+                    if child.filename == part.encode("utf-8")
+                )
+            except StopIteration:
+                message = f"Couldn't find {path_so_far}"
+                raise FileNotFoundError(message) from None
+
+            # Look-up the inode.
+            current_node = self.get_inode(part_inode_number)
+
+        return current_node
+
+    def read(self, path: pathlib.PurePosixPath | str) -> bytes:
+        """Read the contents of a file at the given path."""
+        # TODO: Rework this so its more of an "open" and is its own context
+        # manager and provides the file-like interface over the underlying file.
+        inode = self._path_to_inode(pathlib.PurePosixPath(path))
+
+        if (inode.mode & INODE_TYPE_MASK) == ModeFlags.DIRECTORY:
+            raise ValueError("Not expecting a directory.")
+
+        if (inode.mode & INODE_TYPE_MASK) != ModeFlags.REGULAR:
+            raise ValueError(
+                "Not a regular file - only regular files are supported for now."
+            )
+
+        if inode.indirect != 0:
+            raise ValueError("File with indirect i-nodes is NYI.")
+        if inode.double_index != 0:
+            raise ValueError("Files with double-index i-nodes are NYI.")
+
+        def position_to_block_number(position: int) -> int:
+            """Given the position within the file return the block number in
+            which that position is found.
+
+            This is the block not zone number.
+            """
+            block_index = position // BLOCK_SIZE
+            zone_index = block_index >> self.super_block.log_zone_size
+            block_offset = block_index - (zone_index << self.super_block.log_zone_size)
+            assert zone_index < len(inode.zone_numbers)
+            zone_number = inode.zone_numbers[zone_index]
+            if zone_number == 0:
+                raise ValueError("No zone or block number")
+            return (zone_number << self.super_block.log_zone_size) + block_offset
+
+        # As above, this would ideally be generalised to be more like
+        # read(..., size) based on current position, so lets pretend that is
+        # what is implemented here.
+
+        def _read(position: int, size: int) -> bytes:
+            """Read the given number of bytes (size) starting at position."""
+            block_number = position_to_block_number(position)
+            block = self.get_block(block_number)
+            if len(block) < size:
+                raise ValueError("Only reading the first file is supported")
+            return block[position : position + size]
+
+        return _read(position=0, size=inode.file_size)
+
 
 def open_image(path: pathlib.Path):
     """Open an image that was formatted as the Minix file system.
@@ -413,6 +496,8 @@ def open_image(path: pathlib.Path):
             "Root director entries:\n  " + "\n  ".join(map(str, root_directory.entries))
         )
         print(f"Cleanly unmounted: {system.super_block.cleanly_unmounted}")
+        print("Contents of /users/ast/welcome", system.read("/users/ast/welcome"))
+        print("Contents of /users/ast/books", system.read("/users/ast/books"))
 
 
 if __name__ == "__main__":
