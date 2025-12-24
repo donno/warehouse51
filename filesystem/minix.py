@@ -49,7 +49,6 @@ Disk layout
 - data zones  (zone count - first data size) <<< log_zone_size.
 
 TODO
-- Add a walk function to walk over the entire file system, similar to os.walk()
 - Modify/write to the file system.
 - Write a tool that converted a `tar` to a Minix formatted disk image.
 - Separate block handling / device handling out - i.e. try a more layered
@@ -57,6 +56,11 @@ TODO
 - Implement fsspec over which provides a more common interface over it the
   higher level file system interface. Think of it as pathlib but for the IO.
 - Handle indirect and second-level indirect files.
+
+Done
+- Add a walk function to walk over the entire file system, similar to
+  os.walk(). Completed 2025-12-24.
+
 """
 
 import enum
@@ -580,6 +584,40 @@ class DirEntry:
         return f"{self.__class__.__qualname__}('{self._path}', {self.inode()})"
 
 
+def walk(path: os.PathLike | str, system: LoadedSystem):
+    """Directory tree generator.
+
+    For each directory in the directory tree rooted at top (including top
+    itself, but excluding '.' and '..'), yields a 3-tuple
+
+        dirpath, dirnames, filenames
+    """
+
+    path = pathlib.PurePosixPath(os.fspath(path))
+
+    # This is based on the os.walk() function, it would be better if it yield
+    # the DirEntry items instead of the names only.
+    #
+    # if there was a version of scandir() that took the inode numbers or even
+    # the inodes then this would be simpler as scandir() already loads the
+    # IndexNode to determine if it is a directory or not.
+    directories = []
+    non_directories = []
+
+    directory_iterator = system.scandir(path)
+    for entry in directory_iterator:
+        if entry.is_dir():
+            directories.append(entry.name)
+        else:
+            non_directories.append(entry.name)
+
+    # This assumes top-down.
+    yield path, directories, non_directories
+
+    for directory in directories:
+        yield from walk(path / directory, system)
+
+
 def open_image(path: pathlib.Path):
     """Open an image that was formatted as the Minix file system.
 
@@ -609,6 +647,17 @@ def open_image(path: pathlib.Path):
 
         for entry in system.scandir("/users/ast/"):
             print(entry, entry.is_file(), entry.is_dir())
+
+        # Demonstration of the walk() functionality.
+        for root, dirs, filenames in walk("/", system):
+            print(root)
+            for name in filenames:
+                print(f"  {root / name}")
+
+            # Removing an item from dirnames is meant to prevent it from
+            # being searched. This is not tested/implemented.
+            if "bin" in dirs:
+                dirs.remove("bin")
 
 
 if __name__ == "__main__":
