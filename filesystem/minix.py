@@ -494,6 +494,28 @@ class LoadedSystem:
 
         return _read(position=0, size=inode.file_size)
 
+    def scandir(self, path: os.PathLike | str):
+        """Return an iterator of DirEntry objects corresponding to the
+        entries in the directory given by path.
+        """
+        path = pathlib.PurePosixPath(os.fspath(path))
+
+        inode = self._path_to_inode(path)
+        if not inode.is_directory:
+            raise NotADirectoryError(f"The directory name is invalid: {path}")
+
+        # This could be reworked to replace read_directory(), granted that
+        # function doesn't currently need to look-up the inodes of the
+        # children, so in a way it is lazier then this function.
+        children = self.read_directory(inode).entries
+        for child in children:
+            if child.filename in (b".", b".."):
+                continue
+            yield DirEntry(
+                path / child.filename.decode("utf-8"),
+                child.inode_number,
+                system=self,
+            )
 
     def stat(self, path: os.PathLike | str) -> os.stat_result:
         """Get the status of a file or a file descriptor."""
@@ -501,6 +523,60 @@ class LoadedSystem:
         # The number property is set by _path_to_inode() so it doesn't have to
         # return a pair.
         return inode.stat(inode.number)
+
+
+class DirEntry:
+    """Object yielded by scandir() to expose the file path and other file attributes of a directory entry.
+
+    This can't use os.DirEntry as that type can't be created.
+    """
+
+    def __init__(
+        self, path: pathlib.PurePosixPath, inode_number: int, system: LoadedSystem
+    ):
+        self._path = path
+        self._inode_number = inode_number
+        self._system = system
+        self._cached_inode: IndexNode | None = None
+        self._cached_stat: os.stat_result | None = None
+
+    @property
+    def name(self) -> str:
+        """The entry’s base filename, relative to the scandir() path argument."""
+        return self._path.name
+
+    @property
+    def path(self) -> pathlib.PurePosixPath:
+        """The entry’s full path name."""
+        return self._path
+
+    def inode(self) -> int:
+        """Return the inode number of the entry."""
+        return self._inode_number
+
+    def is_file(self) -> bool:
+        """Whether this path is a regular file"""
+        stat = self._cache_stat()
+        return (stat.st_mode & INODE_TYPE_MASK) == ModeFlags.REGULAR
+
+    def is_dir(self) -> bool:
+        """Whether this path is a directory."""
+        stat = self._cache_stat()
+        return (stat.st_mode & INODE_TYPE_MASK) == ModeFlags.DIRECTORY
+
+    def stat(self):
+        """Get the status of a file or a file descriptor."""
+        return self._cache_stat()
+
+    def _cache_stat(self) -> os.stat_result:
+        """Cache the stat result if it not already and return it."""
+        if not self._cached_stat:
+            self._cached_inode = self._system.get_inode(self._inode_number)
+            self._cached_stat = self._cached_inode.stat(self._inode_number)
+        return self._cached_stat
+
+    def __repr__(self):
+        return f"{self.__class__.__qualname__}('{self._path}', {self.inode()})"
 
 
 def open_image(path: pathlib.Path):
@@ -529,6 +605,9 @@ def open_image(path: pathlib.Path):
         print(f"Cleanly unmounted: {system.super_block.cleanly_unmounted}")
         print("Contents of /users/ast/welcome", system.read("/users/ast/welcome"))
         print("Contents of /users/ast/books", system.read("/users/ast/books"))
+
+        for entry in system.scandir("/users/ast/"):
+            print(entry, entry.is_file(), entry.is_dir())
 
 
 if __name__ == "__main__":
