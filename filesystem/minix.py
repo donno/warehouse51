@@ -412,8 +412,9 @@ class LoadedSystem:
             block = self.get_block(zone)
             for child_inode, name in struct.iter_unpack("<H14s", block):
                 if child_inode != 0:
-                    terminator = name.index(b"\0")
-                    name = name[:terminator]
+                    terminator = name.find(b"\0")
+                    if terminator >= 0:
+                        name = name[:terminator]
                     entries.append(DirectoryEntry(child_inode, name))
 
         return Directory(inode, entries)
