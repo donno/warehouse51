@@ -53,14 +53,16 @@ TODO
 - Write a tool that converted a `tar` to a Minix formatted disk image.
 - Separate block handling / device handling out - i.e. try a more layered
   approach
+- Handle indirect and second-level indirect files.
+
+In-progress
 - Implement fsspec over which provides a more common interface over it the
   higher level file system interface. Think of it as pathlib but for the IO.
-- Handle indirect and second-level indirect files.
+  This is handled in separate module (minix_fsspec) .
 
 Done
 - Add a walk function to walk over the entire file system, similar to
   os.walk(). Completed 2025-12-24.
-
 """
 
 import enum
