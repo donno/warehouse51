@@ -60,6 +60,7 @@ TODO
 """
 
 import enum
+import os
 import pathlib
 import struct
 import typing
@@ -189,7 +190,10 @@ class ModeFlags(enum.IntFlag):
     REGULAR = 0o0100000
     BLOCK_SPECIAL = 0o0060000
     DIRECTORY = 0o0040000
-    """The file is a directory."""
+    """The file is a directory.
+
+    This matches stat.S_IFDIR.
+    """
     CHAR_SPECIAL = 0o0020000
     """This is a special character file."""
 
@@ -240,6 +244,23 @@ class IndexNode:
     def is_directory(self) -> bool:
         """Return True if the index node refers to a directory."""
         return (self.mode & INODE_TYPE_MASK) == ModeFlags.DIRECTORY
+
+    def stat(self, inode_number: int) -> os.stat_result:
+        """Get the status of this file."""
+        return os.stat_result(
+            [
+                self.mode,
+                inode_number,
+                None,  # Device
+                self.links,
+                self.uid,
+                self.gid,
+                self.file_size,
+                0.0,  # Time of most recent access expressed in seconds..
+                self.time_of_last_modification,
+                self.time_of_last_modification,  # Creation time.
+            ]
+        )
 
     @classmethod
     def from_bytes(cls, content: bytes, offset: int = 0):
@@ -404,6 +425,7 @@ class LoadedSystem:
         assert path.parts[0] == "/", "Only absolute paths are supported"
         parts = path.parts[1:]
         current_node = self.root_inode
+        current_node.number = ROOT_INODE
         path_so_far = pathlib.PurePosixPath("/")
         for part in parts:
             children = self.read_directory(current_node).entries
@@ -420,6 +442,7 @@ class LoadedSystem:
 
             # Look-up the inode.
             current_node = self.get_inode(part_inode_number)
+            current_node.number = part_inode_number
 
         return current_node
 
@@ -470,6 +493,14 @@ class LoadedSystem:
             return block[position : position + size]
 
         return _read(position=0, size=inode.file_size)
+
+
+    def stat(self, path: os.PathLike | str) -> os.stat_result:
+        """Get the status of a file or a file descriptor."""
+        inode = self._path_to_inode(pathlib.PurePosixPath(path))
+        # The number property is set by _path_to_inode() so it doesn't have to
+        # return a pair.
+        return inode.stat(inode.number)
 
 
 def open_image(path: pathlib.Path):
