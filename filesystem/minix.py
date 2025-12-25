@@ -54,6 +54,7 @@ TODO
 - Separate block handling / device handling out - i.e. try a more layered
   approach
 - Handle indirect and second-level indirect files.
+- Handle reading part of a file and across blocks.
 
 In-progress
 - Implement fsspec over which provides a more common interface over it the
@@ -302,6 +303,129 @@ class Directory:
     entries: list[DirectoryEntry]
 
 
+class FileIO(typing.BinaryIO):
+    """Represents a file from the file system as a file-like object."""
+
+    def __init__(self, name: str, mode: str, inode: IndexNode, system: "LoadedSystem"):
+        if (inode.mode & INODE_TYPE_MASK) == ModeFlags.DIRECTORY:
+            # This matches what Python does on Linux, where as on Windows it is
+            # a permission denied error instead.
+            raise IsADirectoryError(f"Is a directory: '{name}'.")
+
+        if (inode.mode & INODE_TYPE_MASK) != ModeFlags.REGULAR:
+            raise ValueError(
+                "Not a regular file - only regular files are supported for now."
+            )
+
+        if inode.indirect != 0:
+            raise ValueError("File with indirect i-nodes is NYI.")
+        if inode.double_index != 0:
+            raise ValueError("Files with double-index i-nodes are NYI.")
+
+        self._mode = mode
+        self._name = name
+        self._inode = inode
+        self._inode_number = inode.number
+        self._system = system
+        self._closed = False
+        self._position = 0
+
+    def __repr__(self):
+        if self._closed:
+            return f"{self.__class__.__qualname__}(closed)"
+        return (
+            f"{self.__class__.__qualname__}({self._name}, inode={self._inode_number})"
+        )
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def close(self) -> None:
+        """Flush and close the IO object.
+
+        This method has no effect if the file is already closed.
+        """
+        self._closed = True
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def readable(self) -> bool:
+        """Return whether object was opened for reading."""
+        return True
+
+    def read(self, n: int = -1) -> typing.AnyStr:
+        """Read at most n characters from stream.
+
+        Read from underlying buffer until we have n characters or we hit EOF.
+        If n is negative or omitted, read until EOF.
+        """
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+
+        # TODO: partial reads are NYI.
+        n = self._inode.file_size if n < 0 else min(n, self._inode.file_size)
+        data = self._read(position=self._position, size=n)
+        self._position += n
+        return data
+
+    def _read(self, position: int, size: int) -> bytes:
+        """Read the given number of bytes (size) starting at position."""
+        file_size = self._inode.file_size
+        if position >= file_size:
+            return b""
+        block_number = self._system._position_to_block_number(self._inode, position)
+        block = self._system.get_block(block_number)
+        if len(block) < size:
+            message = f"Only reading the first block is supported ({size})"
+            raise ValueError(message)
+
+        return block[position : min(position + size, file_size)]
+
+    def seekable(self) -> bool:
+        """Return whether object supports random access.
+
+        If False, seek(), tell() and truncate() will raise OSError.
+        This method may need to do a test seek().
+        """
+        return True
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        """Change the stream position to the given byte offset."""
+        if whence == 0:
+            if offset < 0:
+                message = f"negative seek position {offset}"
+                raise ValueError(message)
+            self._position = offset
+            return self._position
+
+        # * 1 -- current stream position; offset may be negative
+        # * 2 -- end of stream; offset is usually negative
+        raise ValueError("Unhandled value for whence")
+
+    def writable(self) -> bool:
+        """Return whether object was opened for writing.
+
+        If False, write() will raise OSError.
+        """
+        return False
+
+    def write(self, s: typing.AnyStr) -> int:
+        raise OSError("File is not writable.")
+
+    def __enter__(self) -> typing.IO[typing.AnyStr]:
+        return self
+
+    def __exit__(self, type, value, traceback) -> None:
+        self.close()
+
+
 class LoadedSystem:
     """Represented the loaded version of the Minix file system."""
 
@@ -453,53 +577,15 @@ class LoadedSystem:
 
         return current_node
 
+    def open(self, path: os.PathLike | str, mode: str) -> FileIO:
+        """Open file and return a stream.  Raise OSError upon failure."""
+        inode = self._path_to_inode(pathlib.PurePosixPath(path))
+        return FileIO(path, mode, inode, self)
+
     def read(self, path: pathlib.PurePosixPath | str) -> bytes:
         """Read the contents of a file at the given path."""
-        # TODO: Rework this so its more of an "open" and is its own context
-        # manager and provides the file-like interface over the underlying file.
-        inode = self._path_to_inode(pathlib.PurePosixPath(path))
-
-        if (inode.mode & INODE_TYPE_MASK) == ModeFlags.DIRECTORY:
-            raise ValueError("Not expecting a directory.")
-
-        if (inode.mode & INODE_TYPE_MASK) != ModeFlags.REGULAR:
-            raise ValueError(
-                "Not a regular file - only regular files are supported for now."
-            )
-
-        if inode.indirect != 0:
-            raise ValueError("File with indirect i-nodes is NYI.")
-        if inode.double_index != 0:
-            raise ValueError("Files with double-index i-nodes are NYI.")
-
-        def position_to_block_number(position: int) -> int:
-            """Given the position within the file return the block number in
-            which that position is found.
-
-            This is the block not zone number.
-            """
-            block_index = position // BLOCK_SIZE
-            zone_index = block_index >> self.super_block.log_zone_size
-            block_offset = block_index - (zone_index << self.super_block.log_zone_size)
-            assert zone_index < len(inode.zone_numbers)
-            zone_number = inode.zone_numbers[zone_index]
-            if zone_number == 0:
-                raise ValueError("No zone or block number")
-            return (zone_number << self.super_block.log_zone_size) + block_offset
-
-        # As above, this would ideally be generalised to be more like
-        # read(..., size) based on current position, so lets pretend that is
-        # what is implemented here.
-
-        def _read(position: int, size: int) -> bytes:
-            """Read the given number of bytes (size) starting at position."""
-            block_number = position_to_block_number(position)
-            block = self.get_block(block_number)
-            if len(block) < size:
-                raise ValueError("Only reading the first file is supported")
-            return block[position : position + size]
-
-        return _read(position=0, size=inode.file_size)
+        with self.open(path, "rb") as readable_file:
+            return readable_file.read()
 
     def scandir(self, path: os.PathLike | str):
         """Return an iterator of DirEntry objects corresponding to the
@@ -530,6 +616,21 @@ class LoadedSystem:
         # The number property is set by _path_to_inode() so it doesn't have to
         # return a pair.
         return inode.stat(inode.number)
+
+    def _position_to_block_number(self, inode: IndexNode, position: int) -> int:
+        """Given the position within the file return the block number in
+        which that position is found.
+
+        This is the block not zone number.
+        """
+        block_index = position // BLOCK_SIZE
+        zone_index = block_index >> self.super_block.log_zone_size
+        block_offset = block_index - (zone_index << self.super_block.log_zone_size)
+        assert zone_index < len(inode.zone_numbers)
+        zone_number = inode.zone_numbers[zone_index]
+        if zone_number == 0:
+            raise ValueError("No zone or block number")
+        return (zone_number << self.super_block.log_zone_size) + block_offset
 
 
 class DirEntry:
@@ -660,6 +761,24 @@ def open_image(path: pathlib.Path):
             # being searched. This is not tested/implemented.
             if "bin" in dirs:
                 dirs.remove("bin")
+
+        # Demonstrate of the open() functionality.
+        with system.open("/users/ast/books", "rb") as opened_file:
+            print(opened_file)
+            print(opened_file.name)
+            print("First read", opened_file.read())
+            print("Second read", opened_file.read())
+            opened_file.seek(0)
+            print("After seek", opened_file.read())
+
+            opened_file.seek(0)
+            print("Read 4 bytes", opened_file.read(4))
+            print("Read next 4 bytes", opened_file.read(4))
+            print("Read till end", opened_file.read())
+
+            opened_file.close()
+            print("Closed", opened_file.closed)
+            # print("Read after close", opened_file.read()) # Throws ValueError
 
 
 if __name__ == "__main__":
