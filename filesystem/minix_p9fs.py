@@ -166,8 +166,23 @@ class MinixFs:
     def create(self, srv, req):
         LOGGER.info("create")
 
-    # def clunk(self, srv, req):
-    #     LOGGER.info("clunk")
+    def clunk(self, srv, req):
+        """Forget about a fid.
+
+        The clunk request informs the file server that the current file
+        represented by fid is no longer needed by the client.
+        The actual file is not removed on the server.
+        """
+        f = self.getfile(req.fid.qid.path)
+        if not f:
+            srv.respond(req, 'unknown file')
+            return
+        f = self.files[req.fid.qid.path]
+        if hasattr(f, 'fd') and f.fd is not None:
+            LOGGER.info("close [%s]", f.localpath)
+            f.fd.close()
+            f.fd = None
+        srv.respond(req, None)
 
     def stat(self, srv, req):
         """Respond to the Tstat message."""
