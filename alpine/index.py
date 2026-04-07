@@ -21,12 +21,12 @@ class Package:
     size: int
     installed_size: int
     description: str
-    url: str
-    license: str
-    origin: str
-    build_time: int
+    url: str = ""
+    license: str = ""
+    origin: str = ""
+    build_time: int = 0
     """Unix timestamp of the package build date/time."""
-    commit: str
+    commit: str = ""
     maintainer: str = ""
     """The name (and typically email) of person who built the package."""
     provider_priority: int = 100
