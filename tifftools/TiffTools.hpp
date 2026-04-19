@@ -26,7 +26,9 @@
 
 #include <utility>
 
+#ifndef TIFFTOOLS_WITHOUT_LIBTIFF
 #include <tiffio.h>
+#endif
 
 namespace TiffTools
 {
@@ -85,6 +87,7 @@ namespace TiffTools
     virtual void FlagNoData(int X, int Y) = 0;
   };
 
+#ifndef TIFFTOOLS_WITHOUT_LIBTIFF
   void RegisterAdditionalTiffTags();
   // Call this function at the start to register the GDAL + GeoTIFF tags
   // for TIFF.
@@ -102,6 +105,7 @@ namespace TiffTools
   // Ideally, the importer could be queried for a max size and if so then
   // it could be broken up until multiple tiles.
   void ReadViaScanLines(TIFF* Tiff, IElevationImporter* Importer);
+#endif
 }
 
 #endif

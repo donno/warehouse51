@@ -20,17 +20,20 @@
 
 #include "GdalReader.hpp"
 
+#define TIFFTOOLS_WITHOUT_LIBTIFF
+#include "TiffTools.hpp"
+
 #include "gdal_priv.h"
 
 static void error_reporter(CPLErr error_class, int error_number,
                            const char *message) {
-  fprintf(stderr, "Error (%d) with GDAL occurred: %s", error_number, message);
+  fprintf(stderr, "Error (%d) with GDAL occurred: %s\n", error_number, message);
 }
 
 // Allocate the array using GDAL's Common Portability Library.
 template <typename T>
 static std::unique_ptr<T[], decltype(&::CPLFree)> malloc_array(size_t size) {
-  return {(float *)::CPLMalloc(sizeof(T) * size), ::CPLFree};
+  return {(T *)::CPLMalloc(sizeof(T) * size), ::CPLFree};
 }
 
 static void output_information(GDALDataset *dataset) {
@@ -68,24 +71,80 @@ static void output_information(GDALDataset *dataset) {
            band->GetColorTable()->GetColorEntryCount());
 }
 
-int main(int argc, const char *argv[]) {
-  if (argc != 2) {
-    printf("Missing path to the DEM file.\n");
-    return 2;
-  }
-
-  const char *filename = argv[1];
-
-  GDALAllRegister();
-  CPLSetErrorHandler(error_reporter);
+void TiffTools::Gdal::ReadViaTiles(const char *Path,
+                                   IElevationImporter *Importer) {
   const GDALAccess access = GA_ReadOnly;
   GDALDatasetUniquePtr dataset =
-      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(filename, access)));
+      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(Path, access)));
   if (!dataset) {
-    return 3;
+    fprintf(stderr, "Failed to open dataset at %s\n", Path);
+    return;
   }
-  output_information(dataset.get());
 
+  // This version should read on the block boundaries using ReadBlock() and
+  // GetBlockSize().
+  fprintf(stderr, "Not yet implemented - reading via tiles/blocks\n");
+  std::abort();
+}
+
+void TiffTools::Gdal::ReadViaScanLines(const char *Path,
+                                       IElevationImporter *Importer) {
+  const GDALAccess access = GA_ReadOnly;
+  GDALDatasetUniquePtr dataset =
+      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(Path, access)));
+  if (!dataset) {
+    fprintf(stderr, "Failed to open dataset at %s\n", Path);
+    return;
+  }
+
+  GDALRasterBand *band = dataset->GetRasterBand(1);
+  const auto width = band->GetXSize();
+  const auto height = band->GetYSize();
+
+  double adfGeoTransform[6];
+  if (dataset->GetGeoTransform(adfGeoTransform) == CE_None) {
+    const TiffTools::Vector2D cellSize{adfGeoTransform[1], adfGeoTransform[5]};
+    const TiffTools::Point2D lowerLeft{
+        adfGeoTransform[0], adfGeoTransform[3] - height * cellSize.y};
+    const TiffTools::Point2D upperRight{lowerLeft.x + width * cellSize.x,
+                                        adfGeoTransform[3]};
+    Importer->BeginTile(lowerLeft, upperRight, cellSize);
+  } else {
+    fprintf(stderr, "Unable to determine size and origin.\n");
+  }
+
+  auto progress = Importer->Progress();
+  if (progress)
+    progress->Start(height);
+
+  auto scanline = malloc_array<float>(width);
+
+  for (int row = 0; row < height; ++row) {
+    // Consider BeginAsyncReader / EndAsyncReader.
+    auto result = band->RasterIO(GF_Read, 0, row, width, 1, scanline.get(),
+                                 width, 1, GDT_Float32, 0, 0);
+    if (result == CE_Failure) {
+      fprintf(stderr, "Failed to read data from first band.\n");
+      break;
+    }
+
+    for (int column = 0; column < width; ++column) {
+      // TODO: Handle if there was a no-data value there.
+      Importer->SetValue(column, height - row, scanline[column]);
+    }
+
+    if (progress)
+      progress->StripProcessed();
+  }
+
+  if (progress)
+    progress->End();
+
+  Importer->EndTile(0, 0, false);
+}
+
+// This is a debug aid.
+static int output_values(GDALDataset *dataset) {
   GDALRasterBand *band = dataset->GetRasterBand(1);
   const int sizeX = band->GetXSize();
   int blockXSize, blockYSize;
@@ -113,4 +172,40 @@ int main(int argc, const char *argv[]) {
   }
 
   return 0;
+}
+
+class ElevationPrinter : public TiffTools::IElevationImporter {
+  void BeginTile(TiffTools::Point2D LowerBound, TiffTools::Point2D UpperBound,
+                 TiffTools::Vector2D CellSize) override {}
+  void EndTile(int TileIndexX, int TileIndexY, bool DiscardTile) override {};
+  void FlagNoData(int X, int Y) override {}
+
+  void SetValue(int X, int Y, double Value) { printf("%f ", Value); }
+};
+
+int main(int argc, const char *argv[]) {
+  if (argc != 2) {
+    printf("Missing path to the DEM file.\n");
+    return 2;
+  }
+
+  const char *filename = argv[1];
+
+  GDALAllRegister();
+  CPLSetErrorHandler(error_reporter);
+
+#if 1
+  ElevationPrinter importer;
+  TiffTools::Gdal::ReadViaScanLines(filename, &importer);
+  return 0;
+#else
+  const GDALAccess access = GA_ReadOnly;
+  GDALDatasetUniquePtr dataset =
+      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(filename, access)));
+  if (!dataset) {
+    return 3;
+  }
+  output_information(dataset.get());
+  return output_values(dataset.get());
+#endif
 }
