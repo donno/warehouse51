@@ -1,0 +1,116 @@
+//===----------------------------------------------------------------------===//
+//
+// NAME         : GDAL Reader
+// NAMESPACE    : TiffTools.Gdal
+// PURPOSE      : Uses GDAL for working with TIFF files.
+// COPYRIGHT    : (c) 2026 Sean Donnellan. All Rights Reserved.
+// AUTHORS      : Sean Donnellan (darkdonno@gmail.com)
+// DESCRIPTION  : Provides tools for working with TIFF files which represent
+//                digital elevation models, that is to say not photographs.
+//
+// References:
+// - https://gdal.org/en/stable/tutorials/raster_api_tut.html
+// - https://gdal.org/en/stable/tutorials/raster_dtm_tut.html
+//
+// Development:
+// - apk add gdal-dev g++  # For Alpine
+// - g++ GdalReader.cpp -lgdal -o gdal_reader
+// - ./gdal_reader build/vmelev_dem10m_sub_section_tile.tif
+//===----------------------------------------------------------------------===/
+
+#include "GdalReader.hpp"
+
+#include "gdal_priv.h"
+
+static void error_reporter(CPLErr error_class, int error_number,
+                           const char *message) {
+  fprintf(stderr, "Error (%d) with GDAL occurred: %s", error_number, message);
+}
+
+// Allocate the array using GDAL's Common Portability Library.
+template <typename T>
+static std::unique_ptr<T[], decltype(&::CPLFree)> malloc_array(size_t size) {
+  return {(float *)::CPLMalloc(sizeof(T) * size), ::CPLFree};
+}
+
+static void output_information(GDALDataset *dataset) {
+  double adfGeoTransform[6];
+  printf("Driver: %s/%s\n", dataset->GetDriver()->GetDescription(),
+         dataset->GetDriver()->GetMetadataItem(GDAL_DMD_LONGNAME));
+  printf("Size is %dx%dx%d\n", dataset->GetRasterXSize(),
+         dataset->GetRasterYSize(), dataset->GetRasterCount());
+  if (dataset->GetProjectionRef() != NULL)
+    printf("Projection is `%s'\n", dataset->GetProjectionRef());
+  if (dataset->GetGeoTransform(adfGeoTransform) == CE_None) {
+    printf("Origin = (%.6f,%.6f)\n", adfGeoTransform[0], adfGeoTransform[3]);
+    printf("Pixel Size = (%.6f,%.6f)\n", adfGeoTransform[1],
+           adfGeoTransform[5]);
+  }
+
+  printf("\nBand information\n");
+  GDALRasterBand *band = dataset->GetRasterBand(1);
+  int blockXSize, blockYSize;
+  band->GetBlockSize(&blockXSize, &blockYSize);
+  printf("Block=%dx%d Type=%s, ColorInterp=%s\n", blockXSize, blockYSize,
+         GDALGetDataTypeName(band->GetRasterDataType()),
+         GDALGetColorInterpretationName(band->GetColorInterpretation()));
+  int bGotMin, bGotMax;
+  double adfMinMax[2];
+  adfMinMax[0] = band->GetMinimum(&bGotMin);
+  adfMinMax[1] = band->GetMaximum(&bGotMax);
+  if (!(bGotMin && bGotMax))
+    GDALComputeRasterMinMax((GDALRasterBandH)band, TRUE, adfMinMax);
+  printf("Min=%.3fd, Max=%.3f\n", adfMinMax[0], adfMinMax[1]);
+  if (band->GetOverviewCount() > 0)
+    printf("Band has %d overviews.\n", band->GetOverviewCount());
+  if (band->GetColorTable() != NULL)
+    printf("Band has a color table with %d entries.\n",
+           band->GetColorTable()->GetColorEntryCount());
+}
+
+int main(int argc, const char *argv[]) {
+  if (argc != 2) {
+    printf("Missing path to the DEM file.\n");
+    return 2;
+  }
+
+  const char *filename = argv[1];
+
+  GDALAllRegister();
+  CPLSetErrorHandler(error_reporter);
+  const GDALAccess access = GA_ReadOnly;
+  GDALDatasetUniquePtr dataset =
+      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(filename, access)));
+  if (!dataset) {
+    return 3;
+  }
+  output_information(dataset.get());
+
+  GDALRasterBand *band = dataset->GetRasterBand(1);
+  const int sizeX = band->GetXSize();
+  int blockXSize, blockYSize;
+  band->GetBlockSize(&blockXSize, &blockYSize);
+
+  auto scanline = malloc_array<float>(sizeX);
+
+  // TODO: Handle reading the data - this only reads the first line.
+  //
+  // Consider reading on block boundaries using ReadBlock() and GetBlockSize().
+  // Consider BeginAsyncReader / EndAsyncReader.
+  for (int row = 0, rowCount = band->GetYSize(); row < rowCount; ++row) {
+    auto result = band->RasterIO(GF_Read, 0, 0, sizeX, 1, scanline.get(), sizeX,
+                                 1, GDT_Float32, 0, 0);
+    if (result == CE_Failure) {
+      fprintf(stderr, "Failed to read data from first band.\n");
+      return 3;
+    }
+
+    for (int i = 0; i < sizeX; ++i) {
+      printf("%f ", scanline[i]);
+    }
+    printf("\n");
+    break;
+  }
+
+  return 0;
+}
