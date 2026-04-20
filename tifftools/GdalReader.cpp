@@ -166,6 +166,9 @@ void TiffTools::Gdal::ReadViaTiles(const char *Path,
 
   // blockRow = 0, means the top most block and blockColumn = 0 means the
   // left most block.
+  //
+  // Alternative: look at using GDALRasterBand::IterateWindows() which iterates
+  // over windows aligned to blocks.
   for (int blockRow = 0; blockRow < blockRowCount; blockRow++) {
     const int tileYOffset = blockRow * blockHeight;
 
