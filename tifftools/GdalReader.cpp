@@ -14,7 +14,7 @@
 //
 // Development:
 // - apk add gdal-dev g++  # For Alpine
-// - g++ GdalReader.cpp -lgdal -o gdal_reader
+// - g++ GdalReader.cpp -D TIFFTOOLS_WITH_GDAL_READER_MAIN -lgdal -o gdal_reader
 // - ./gdal_reader build/vmelev_dem10m_sub_section_tile.tif
 //===----------------------------------------------------------------------===/
 
@@ -24,6 +24,8 @@
 #include "TiffTools.hpp"
 
 #include "gdal_priv.h"
+
+#include <optional>
 
 static void error_reporter(CPLErr error_class, int error_number,
                            const char *message) {
@@ -81,10 +83,86 @@ void TiffTools::Gdal::ReadViaTiles(const char *Path,
     return;
   }
 
-  // This version should read on the block boundaries using ReadBlock() and
-  // GetBlockSize().
-  fprintf(stderr, "Not yet implemented - reading via tiles/blocks\n");
-  std::abort();
+  GDALRasterBand *band = dataset->GetRasterBand(1);
+  int blockWidth, blockHeight;
+  band->GetBlockSize(&blockWidth, &blockHeight);
+
+  auto data = malloc_array<float>(blockWidth * blockHeight);
+
+  const auto blockColumnCount = DIV_ROUND_UP(band->GetXSize(), blockWidth);
+  const auto blockRowCount = DIV_ROUND_UP(band->GetYSize(), blockHeight);
+  const auto height = band->GetYSize();
+
+  auto progress = Importer->Progress();
+  if (progress) {
+    progress->Start(blockColumnCount * blockRowCount);
+  }
+
+  std::optional<TiffTools::Point2D> origin;
+  TiffTools::Vector2D cellSize;
+  if (double adfGeoTransform[6];
+      dataset->GetGeoTransform(adfGeoTransform) == CE_None) {
+    cellSize = TiffTools::Vector2D{adfGeoTransform[1], adfGeoTransform[5]};
+    origin.emplace(TiffTools::Point2D{
+        adfGeoTransform[0], adfGeoTransform[3] - height * cellSize.y});
+  } else {
+    cellSize = TiffTools::Vector2D{1.0, 1.0};
+  }
+
+  /*
+    const TiffTools::Point2D upperRight{lowerLeft.x + width * cellSize.x,
+                                        adfGeoTransform[3]};
+
+
+    Importer->BeginTile(lowerLeft, upperRight, cellSize);
+    */
+  // The following is based on the example in GDALRasterBand::ReadBlock().
+  //
+  // https://gdal.org/en/stable/doxygen/classGDALRasterBand.html#aed60995d0a5ac730d5137fb96fb0b141
+
+  // TODO: Confirm the X,Y values are computed correct and that it
+  // shouldn't be subtracting the row.
+  for (int blockRow = 0; blockRow < blockRowCount; blockRow++) {
+    const int tileYOffset = blockRow * blockHeight;
+
+    for (int blockColumn = 0; blockColumn < blockColumnCount; blockColumn++) {
+      const int tileXOffset = blockColumn * blockWidth;
+
+      if (origin) {
+        const TiffTools::Point2D upperRight{origin->x +
+                                                blockWidth * blockColumn,
+                                            origin->y + blockHeight * blockRow};
+        Importer->BeginTile(*origin, upperRight, cellSize);
+      }
+
+      auto result = band->ReadBlock(blockColumn, blockRow, data.get());
+      if (result == CE_Failure) {
+        fprintf(stderr, "Failed to read block from first band - skipping.\n");
+        continue;
+      }
+
+      // Compute the portion of the block that is valid for partial edge blocks.
+      int validXCount, validYCount;
+      band->GetActualBlockSize(blockColumn, blockRow, &validXCount,
+                               &validYCount);
+      for (int row = 0; row < validYCount; row++) {
+        for (int column = 0; column < validXCount; column++) {
+          Importer->SetValue(tileXOffset + column, tileYOffset + row,
+                             data[column + row * blockWidth]);
+        }
+      }
+
+      // TODO: If the entire tile was empty then pass discardTile = true.
+      const bool discardTile = true;
+      Importer->EndTile(blockColumn, blockRow, discardTile);
+
+      if (progress)
+        progress->TileProcessed();
+    }
+  }
+
+  if (progress)
+    progress->End();
 }
 
 void TiffTools::Gdal::ReadViaScanLines(const char *Path,
@@ -183,6 +261,7 @@ class ElevationPrinter : public TiffTools::IElevationImporter {
   void SetValue(int X, int Y, double Value) { printf("%f ", Value); }
 };
 
+#ifdef TIFFTOOLS_WITH_GDAL_READER_MAIN
 int main(int argc, const char *argv[]) {
   if (argc != 2) {
     printf("Missing path to the DEM file.\n");
@@ -196,7 +275,8 @@ int main(int argc, const char *argv[]) {
 
 #if 1
   ElevationPrinter importer;
-  TiffTools::Gdal::ReadViaScanLines(filename, &importer);
+  // TiffTools::Gdal::ReadViaScanLines(filename, &importer);
+  TiffTools::Gdal::ReadViaTiles(filename, &importer);
   return 0;
 #else
   const GDALAccess access = GA_ReadOnly;
@@ -209,3 +289,4 @@ int main(int argc, const char *argv[]) {
   return output_values(dataset.get());
 #endif
 }
+#endif
