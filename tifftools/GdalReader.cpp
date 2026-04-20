@@ -27,9 +27,49 @@
 
 #include <optional>
 
+static TiffTools::Gdal::Bounds QueryBounds(GDALRasterBand *Band) {
+  const auto width = Band->GetXSize();
+  const auto height = Band->GetYSize();
+
+  double geoTransform[6];
+  if (Band->GetDataset()->GetGeoTransform(geoTransform) == CE_None) {
+    TiffTools::Gdal::Bounds bounds;
+    bounds.originX = geoTransform[0];
+    bounds.originY = geoTransform[3] + height * geoTransform[5];
+    bounds.cellSizeX = geoTransform[1];
+    bounds.cellSizeY = geoTransform[5];
+    bounds.width = width * geoTransform[1];
+    bounds.height = height * geoTransform[5];
+    return bounds;
+  }
+
+  fprintf(stderr, "Unable to determine bounds (origin and size).\n");
+  return {};
+}
+
 static void error_reporter(CPLErr error_class, int error_number,
                            const char *message) {
   fprintf(stderr, "Error (%d) with GDAL occurred: %s\n", error_number, message);
+}
+
+static bool validate_bounds(const TiffTools::Point2D &LowerLeft,
+                            const TiffTools::Point2D &UpperRight) {
+  if (LowerLeft.x > UpperRight.x) {
+    fprintf(
+        stderr,
+        "The X-coordinate of the lower-left is further to the right then the "
+        "upper-right: %f vs %f.\n",
+        LowerLeft.x, UpperRight.x);
+  }
+
+  if (UpperRight.y < LowerLeft.y) {
+    fprintf(
+        stderr,
+        "The Y-coordinate of the upper-right is below the lower-left point: "
+        "%f should be smaller than %f.\n",
+        LowerLeft.y, UpperRight.y);
+  }
+  return true;
 }
 
 // Allocate the array using GDAL's Common Portability Library.
@@ -73,6 +113,11 @@ static void output_information(GDALDataset *dataset) {
            band->GetColorTable()->GetColorEntryCount());
 }
 
+void TiffTools::Gdal::SetUp() {
+  GDALAllRegister();
+  CPLSetErrorHandler(error_reporter);
+}
+
 void TiffTools::Gdal::ReadViaTiles(const char *Path,
                                    IElevationImporter *Importer) {
   const GDALAccess access = GA_ReadOnly;
@@ -92,49 +137,46 @@ void TiffTools::Gdal::ReadViaTiles(const char *Path,
   const auto blockColumnCount = DIV_ROUND_UP(band->GetXSize(), blockWidth);
   const auto blockRowCount = DIV_ROUND_UP(band->GetYSize(), blockHeight);
   const auto height = band->GetYSize();
+  const auto bounds = QueryBounds(band);
 
   auto progress = Importer->Progress();
   if (progress) {
     progress->Start(blockColumnCount * blockRowCount);
   }
 
-  std::optional<TiffTools::Point2D> origin;
-  TiffTools::Vector2D cellSize;
-  if (double adfGeoTransform[6];
-      dataset->GetGeoTransform(adfGeoTransform) == CE_None) {
-    cellSize = TiffTools::Vector2D{adfGeoTransform[1], adfGeoTransform[5]};
-    origin.emplace(TiffTools::Point2D{
-        adfGeoTransform[0], adfGeoTransform[3] - height * cellSize.y});
-  } else {
-    cellSize = TiffTools::Vector2D{1.0, 1.0};
-  }
+  const TiffTools::Point2D origin{bounds.originX, bounds.originY};
+  const Vector2D cellSize{bounds.cellSizeX, bounds.cellSizeY * -1};
 
-  /*
-    const TiffTools::Point2D upperRight{lowerLeft.x + width * cellSize.x,
-                                        adfGeoTransform[3]};
-
-
-    Importer->BeginTile(lowerLeft, upperRight, cellSize);
-    */
   // The following is based on the example in GDALRasterBand::ReadBlock().
   //
   // https://gdal.org/en/stable/doxygen/classGDALRasterBand.html#aed60995d0a5ac730d5137fb96fb0b141
 
   // TODO: Confirm the X,Y values are computed correct and that it
   // shouldn't be subtracting the row.
+
+  // blockRow = 0, means the top most block and blockColumn = 0 means the
+  // left most block.
   for (int blockRow = 0; blockRow < blockRowCount; blockRow++) {
     const int tileYOffset = blockRow * blockHeight;
 
     for (int blockColumn = 0; blockColumn < blockColumnCount; blockColumn++) {
       const int tileXOffset = blockColumn * blockWidth;
 
-      if (origin) {
-        const TiffTools::Point2D upperRight{origin->x +
-                                                blockWidth * blockColumn,
-                                            origin->y + blockHeight * blockRow};
-        Importer->BeginTile(*origin, upperRight, cellSize);
+      const TiffTools::Point2D lowerBound{
+          origin.x + blockWidth * blockColumn,
+          origin.y - blockHeight * blockRow,
+      };
+      const TiffTools::Point2D upperRight{
+          origin.x + blockWidth * (blockColumn + 1),
+          origin.y - blockHeight * (blockRow + 1),
+      };
+
+      if (!validate_bounds(lowerBound, upperRight)) {
+        fprintf(stderr, "Bounds were invalid - aborting.\n");
+        break;
       }
 
+      Importer->BeginTile(lowerBound, upperRight, cellSize);
       auto result = band->ReadBlock(blockColumn, blockRow, data.get());
       if (result == CE_Failure) {
         fprintf(stderr, "Failed to read block from first band - skipping.\n");
@@ -145,9 +187,10 @@ void TiffTools::Gdal::ReadViaTiles(const char *Path,
       int validXCount, validYCount;
       band->GetActualBlockSize(blockColumn, blockRow, &validXCount,
                                &validYCount);
-      for (int row = 0; row < validYCount; row++) {
-        for (int column = 0; column < validXCount; column++) {
-          Importer->SetValue(tileXOffset + column, tileYOffset + row,
+      for (int row = 0; row < validYCount; ++row) {
+        for (int column = 0; column < validXCount; ++column) {
+          Importer->SetValue(tileXOffset + column,
+                             tileYOffset + (blockHeight - row),
                              data[column + row * blockWidth]);
         }
       }
@@ -178,18 +221,11 @@ void TiffTools::Gdal::ReadViaScanLines(const char *Path,
   GDALRasterBand *band = dataset->GetRasterBand(1);
   const auto width = band->GetXSize();
   const auto height = band->GetYSize();
-
-  double adfGeoTransform[6];
-  if (dataset->GetGeoTransform(adfGeoTransform) == CE_None) {
-    const TiffTools::Vector2D cellSize{adfGeoTransform[1], adfGeoTransform[5]};
-    const TiffTools::Point2D lowerLeft{
-        adfGeoTransform[0], adfGeoTransform[3] - height * cellSize.y};
-    const TiffTools::Point2D upperRight{lowerLeft.x + width * cellSize.x,
-                                        adfGeoTransform[3]};
-    Importer->BeginTile(lowerLeft, upperRight, cellSize);
-  } else {
-    fprintf(stderr, "Unable to determine size and origin.\n");
-  }
+  auto bounds = QueryBounds(band);
+  Importer->BeginTile(
+      Point2D{bounds.originX, bounds.originY},
+      Point2D{bounds.originX + bounds.width, bounds.originY - bounds.height},
+      Vector2D{bounds.cellSizeX, bounds.cellSizeY * -1});
 
   auto progress = Importer->Progress();
   if (progress)
@@ -219,6 +255,19 @@ void TiffTools::Gdal::ReadViaScanLines(const char *Path,
     progress->End();
 
   Importer->EndTile(0, 0, false);
+}
+
+TiffTools::Gdal::Bounds TiffTools::Gdal::QueryBounds(const char *Path) {
+  const GDALAccess access = GA_ReadOnly;
+  GDALDatasetUniquePtr dataset =
+      GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(Path, access)));
+  if (!dataset) {
+    fprintf(stderr, "Failed to open dataset at %s\n", Path);
+    return {};
+  }
+
+  GDALRasterBand *band = dataset->GetRasterBand(1);
+  return QueryBounds(band);
 }
 
 // This is a debug aid.
@@ -267,16 +316,17 @@ int main(int argc, const char *argv[]) {
     printf("Missing path to the DEM file.\n");
     return 2;
   }
-
   const char *filename = argv[1];
 
-  GDALAllRegister();
-  CPLSetErrorHandler(error_reporter);
-
+  TiffTools::Gdal::SetUp();
 #if 1
   ElevationPrinter importer;
   // TiffTools::Gdal::ReadViaScanLines(filename, &importer);
   TiffTools::Gdal::ReadViaTiles(filename, &importer);
+
+  const auto bounds = TiffTools::Gdal::QueryBounds(filename);
+  printf("\nOrigin: %f, %f. Cell size: %f, %f\n", bounds.originX,
+         bounds.originY, bounds.cellSizeX, bounds.cellSizeY);
   return 0;
 #else
   const GDALAccess access = GA_ReadOnly;

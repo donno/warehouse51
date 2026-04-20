@@ -18,6 +18,11 @@ namespace TiffTools
 
   namespace Gdal
   {
+    // Set up GDAL by registering the drivers.
+    //
+    // This needs to be called once for the process.
+    void SetUp();
+
     // Read in the tiles into the given elevation importer grid.
     void ReadViaTiles(const char* Path, IElevationImporter *Importer);
 
@@ -25,5 +30,18 @@ namespace TiffTools
     // Ideally, the importer could be queried for a max size and if so then
     // it could be broken up until multiple tiles.
     void ReadViaScanLines(const char* Path, IElevationImporter *Importer);
+
+    struct Bounds
+    {
+        double originX;
+        double originY;
+        double cellSizeX;
+        double cellSizeY;
+        double width;
+        double height;
+    };
+
+    // Return the bounds of the DEM in world space.
+    Bounds QueryBounds(const char* Path);
   }
 }
