@@ -111,6 +111,16 @@ static void output_information(GDALDataset *dataset) {
   if (band->GetColorTable() != NULL)
     printf("Band has a color table with %d entries.\n",
            band->GetColorTable()->GetColorEntryCount());
+
+  // Offset and scale
+  int success = 0;
+  if (double offset = band->GetOffset(&success) && success) {
+    printf("Raster value offset: %f\n", offset);
+  }
+
+  if (double scale = band->GetScale(&success) && success) {
+    printf("Raster value scale: %f\n", scale);
+  }
 }
 
 void TiffTools::Gdal::SetUp() {
