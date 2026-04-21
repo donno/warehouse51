@@ -257,7 +257,7 @@ void TiffTools::Gdal::ReadViaScanLines(const char *Path,
 
     for (int column = 0; column < width; ++column) {
       // TODO: Handle if there was a no-data value there.
-      Importer->SetValue(column, height - row, scanline[column]);
+      Importer->SetValue(column, height - row - 1, scanline[column]);
     }
 
     if (progress)
