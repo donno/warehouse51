@@ -23,6 +23,11 @@ namespace TiffTools
     // This needs to be called once for the process.
     void SetUp();
 
+    // Tear down GDAL by destroying drivers loaded during set up.
+    //
+    // This should to be called when GDAL is no longer needed.
+    void TearDown();
+
     // Read in the tiles into the given elevation importer grid.
     void ReadViaTiles(const char* Path, IElevationImporter *Importer);
 

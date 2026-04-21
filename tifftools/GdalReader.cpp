@@ -128,6 +128,8 @@ void TiffTools::Gdal::SetUp() {
   CPLSetErrorHandler(error_reporter);
 }
 
+void TiffTools::Gdal::TearDown() { GDALDestroy(); }
+
 void TiffTools::Gdal::ReadViaTiles(const char *Path,
                                    IElevationImporter *Importer) {
   const GDALAccess access = GA_ReadOnly;
@@ -340,16 +342,21 @@ int main(int argc, const char *argv[]) {
   const auto bounds = TiffTools::Gdal::QueryBounds(filename);
   printf("\nOrigin: %f, %f. Cell size: %f, %f\n", bounds.originX,
          bounds.originY, bounds.cellSizeX, bounds.cellSizeY);
+  TiffTools::Gdal::TearDown();
   return 0;
 #else
   const GDALAccess access = GA_ReadOnly;
   GDALDatasetUniquePtr dataset =
       GDALDatasetUniquePtr(GDALDataset::FromHandle(GDALOpen(filename, access)));
   if (!dataset) {
+    TiffTools::Gdal::TearDown();
     return 3;
   }
   output_information(dataset.get());
-  return output_values(dataset.get());
+  auto result = output_values(dataset.get());
+  dataset.reset();
+  TiffTools::Gdal::TearDown();
+  return result;
 #endif
 }
 #endif
