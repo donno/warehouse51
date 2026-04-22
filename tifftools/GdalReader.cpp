@@ -171,19 +171,20 @@ void TiffTools::Gdal::ReadViaTiles(const char *Path,
   //
   // Alternative: look at using GDALRasterBand::IterateWindows() which iterates
   // over windows aligned to blocks.
-  for (int blockRow = 0; blockRow < blockRowCount; blockRow++) {
+  for (int blockRow = 0; blockRow < blockRowCount; ++blockRow) {
+    // for (int blockRow = blockRowCount - 1; blockRow >= 0; --blockRow) {
     const int tileYOffset = blockRow * blockHeight;
 
-    for (int blockColumn = 0; blockColumn < blockColumnCount; blockColumn++) {
+    for (int blockColumn = 0; blockColumn < blockColumnCount; ++blockColumn) {
       const int tileXOffset = blockColumn * blockWidth;
 
       const TiffTools::Point2D lowerBound{
           origin.x + blockWidth * blockColumn,
-          origin.y - blockHeight * blockRow,
+          origin.y - blockHeight * (blockRow + 1),
       };
       const TiffTools::Point2D upperRight{
           origin.x + blockWidth * (blockColumn + 1),
-          origin.y - blockHeight * (blockRow + 1),
+          origin.y - blockHeight * blockRow,
       };
 
       if (!validate_bounds(lowerBound, upperRight)) {
@@ -286,7 +287,7 @@ TiffTools::Gdal::Bounds TiffTools::Gdal::QueryBounds(const char *Path) {
 }
 
 // This is a debug aid.
-static int output_values(GDALDataset *dataset) {
+static int output_values(GDALDataset *dataset, bool ascii_gridded_xyz = true) {
   GDALRasterBand *band = dataset->GetRasterBand(1);
   const int sizeX = band->GetXSize();
   int blockXSize, blockYSize;
@@ -298,19 +299,36 @@ static int output_values(GDALDataset *dataset) {
   //
   // Consider reading on block boundaries using ReadBlock() and GetBlockSize().
   // Consider BeginAsyncReader / EndAsyncReader.
+  const auto bounds = QueryBounds(band);
+  const auto startX = bounds.originX + bounds.cellSizeX / 2.0;
+  const auto startY = bounds.originY + bounds.cellSizeY / 2.0;
+
   for (int row = 0, rowCount = band->GetYSize(); row < rowCount; ++row) {
-    auto result = band->RasterIO(GF_Read, 0, 0, sizeX, 1, scanline.get(), sizeX,
-                                 1, GDT_Float32, 0, 0);
+    auto result = band->RasterIO(GF_Read, 0, row, sizeX, 1, scanline.get(),
+                                 sizeX, 1, GDT_Float32, 0, 0);
     if (result == CE_Failure) {
       fprintf(stderr, "Failed to read data from first band.\n");
       return 3;
     }
 
-    for (int i = 0; i < sizeX; ++i) {
-      printf("%f ", scanline[i]);
+    if (ascii_gridded_xyz) {
+      // Print X, Y, Z - this should match `gdal_translate <path> example.xyz`.
+      const auto y = startY + row * bounds.cellSizeY;
+      for (int i = 0; i < sizeX; ++i) {
+        const auto x = startX + i * bounds.cellSizeX;
+
+        // Ideally, this would output the shortest decimal representation,
+        // such as Ryu - https://github.com/ulfjack/ryu
+        printf("%f %f %f\n", x, y, scanline[i]);
+      }
+    } else {
+      // Print only the heights.
+      for (int i = 0; i < sizeX; ++i) {
+        printf("%f ", scanline[i]);
+      }
+      printf("\n");
+      break;
     }
-    printf("\n");
-    break;
   }
 
   return 0;
@@ -318,11 +336,36 @@ static int output_values(GDALDataset *dataset) {
 
 class ElevationPrinter : public TiffTools::IElevationImporter {
   void BeginTile(TiffTools::Point2D LowerBound, TiffTools::Point2D UpperBound,
-                 TiffTools::Vector2D CellSize) override {}
+                 TiffTools::Vector2D CellSize) override {
+    lastLowerBound = LowerBound;
+    lastCellSize = CellSize;
+    lastLowerBound.x += CellSize.x / 2;
+    lastLowerBound.y += CellSize.y / 2;
+  }
   void EndTile(int TileIndexX, int TileIndexY, bool DiscardTile) override {};
   void FlagNoData(int X, int Y) override {}
 
-  void SetValue(int X, int Y, double Value) { printf("%f ", Value); }
+  void SetValue(int X, int Y, double Value) {
+    if (ascii_gridded_xyz) {
+      // Ideally, this would output the shortest decimal representation,
+      // such as Ryu - https://github.com/ulfjack/ryu
+      const auto worldX = lastLowerBound.x + X * lastCellSize.x;
+      const auto worldY = lastLowerBound.y + Y * lastCellSize.y;
+      printf("%f %f %f\n", worldX, worldY, Value);
+    } else {
+      printf("%f ", Value);
+    }
+  }
+
+  bool ascii_gridded_xyz = true;
+  // Cause SetValue to output using the ASCI gridded XYZ format.
+  // The Cells with same Y coordinates must be placed on consecutive lines.
+  //
+  // This won't work with the ReadViaTiles() as it doesn't output in the right
+  // order.
+
+  TiffTools::Point2D lastLowerBound;
+  TiffTools::Vector2D lastCellSize;
 };
 
 #ifdef TIFFTOOLS_WITH_GDAL_READER_MAIN
@@ -336,8 +379,8 @@ int main(int argc, const char *argv[]) {
   TiffTools::Gdal::SetUp();
 #if 1
   ElevationPrinter importer;
-  // TiffTools::Gdal::ReadViaScanLines(filename, &importer);
-  TiffTools::Gdal::ReadViaTiles(filename, &importer);
+  TiffTools::Gdal::ReadViaScanLines(filename, &importer);
+  // TiffTools::Gdal::ReadViaTiles(filename, &importer);
 
   const auto bounds = TiffTools::Gdal::QueryBounds(filename);
   printf("\nOrigin: %f, %f. Cell size: %f, %f\n", bounds.originX,
