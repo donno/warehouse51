@@ -27,16 +27,16 @@
 //   * Use size_t instead of int in for loop.
 // - Runtime: Slow - took 1290 seconds (21.5 minutes) for single HGT.
 //   - Single threaded so could generate multiple tiles sat same time.
-//   - 38% time spent in canRemoveTriangleFast()
+//   - 38% time spent in canRemoveTriangle()
 //   - 12% in FreeHeap - of which this was in rebuildEdgeMap()
 //   - 8% in std::hash::find()
 //   - 1024 active rows and 30% reduction. Resulting lply was 83MB.
 //     There were 1072984 vertices out of a 12967201.
 // - Runtime even slower -  7286.809s (around 2 hours).
 //    - Increased simplification factor.
-//   - 87.8% spent in canRemoveTriangleFast.
+//   - 87.8% spent in canRemoveTriangle.
 //   - There were 1335315 vertices out of a 12967201 and 2660689 facets.
-// - Runtime acceptable - 402 seconds (just inder 7 minutes) for single HGT.
+// - Runtime acceptable - 402 seconds (just under 7 minutes) for single HGT.
 //   - Replaced the version that doesn't hash the X and Y coordinates.
 //===----------------------------------------------------------------------===//
 
@@ -51,6 +51,7 @@
 #include <memory>
 #include <numeric>
 #include <queue>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -61,12 +62,10 @@ using Triangulator::Kimi::Point;
 using Triangulator::Kimi::Triangle;
 
 struct Edge {
-    size_t v0, v1;
-    Edge(size_t a, size_t b) {
-        v0 = std::min(a, b);
-        v1 = std::max(a, b);
-    }
-    bool operator==(const Edge& other) const {
+    const size_t v0, v1;
+    Edge(size_t a, size_t b) : v0(std::min(a, b)), v1(std::max(a, b)) {}
+
+    inline bool operator==(const Edge& other) const {
         return v0 == other.v0 && v1 == other.v1;
     }
 };
@@ -102,7 +101,7 @@ public:
         {}
 
     // Initialize with DEM dimensions and cell sizes
-    void initialize(int num_cols, double cell_size_x = 1.0, double cell_size_y = 1.0) {
+    void initialize(size_t num_cols, double cell_size_x = 1.0, double cell_size_y = 1.0) {
         cols_ = num_cols;
         cell_size_x_ = cell_size_x;
         cell_size_y_ = cell_size_y;
@@ -128,8 +127,8 @@ public:
 
     // Process a new row of height data (column-major: heights[col] for this row)
     // Call this repeatedly for each row of the DEM.
-    void addRow(const std::vector<double>& heights) {
-        if (heights.size() != static_cast<size_t>(cols_)) {
+    void addRow(const std::span<const double>& heights) {
+        if (heights.size() != cols_) {
             throw std::invalid_argument("Row size mismatch");
         }
 
@@ -137,18 +136,19 @@ public:
         std::vector<size_t> new_point_indices;
         new_point_indices.reserve(cols_);
 
-        for (int c = 0; c < cols_; ++c) {
-            size_t idx = all_points_.size();
+        for (size_t column = 0; column < cols_; ++column) {
+            const size_t idx = all_points_.size();
             all_points_.emplace_back(
-                c * cell_size_x_,           // x
+                column * cell_size_x_,       // x
                 current_row_ * cell_size_y_, // y
-                heights[c],                  // z
-                static_cast<int>(current_row_), c, idx
+                heights[column],             // z
+                current_row_, column, idx
             );
             new_point_indices.push_back(idx);
 
             // Quantized insert: direct array indexing, no hash computation
-            active_grid_[gridIndex(current_row_, c)] = static_cast<int64_t>(idx);
+            active_grid_[gridIndex(current_row_, column)] =
+                static_cast<int64_t>(idx);
         }
 
         // Triangulate with previous row if available
@@ -197,12 +197,12 @@ private:
     // Quantized Grid: O(1) direct lookup via (row % max_active_rows, col)
     // -------------------------------------------------------------------------
 
-    size_t gridIndex(int row, int col) const {
-        return static_cast<size_t>((row % static_cast<int>(max_active_rows_)) * cols_ + col);
+    size_t gridIndex(size_t row, size_t col) const {
+        return static_cast<size_t>((row % max_active_rows_) * cols_ + col);
     }
 
-    int64_t getGridVertex(int row, int col) const {
-        if (row < static_cast<int>(finalized_row_) || row >= static_cast<int>(current_row_)) return -1;
+    int64_t getGridVertex(size_t row, size_t col) const {
+        if (row < finalized_row_ || row >= current_row_) return -1;
         if (col < 0 || col >= cols_) return -1;
         return active_grid_[gridIndex(row, col)];
     }
@@ -290,18 +290,18 @@ private:
 
     // Triangulate between two rows using standard strip pattern
     // Creates triangles in consistent winding order
-    void triangulateStrip(const std::vector<size_t>& top_row,
-                          const std::vector<size_t>& bottom_row) {
-        for (int c = 0; c < cols_ - 1; ++c) {
-            size_t tl = top_row[c];
-            size_t bl = bottom_row[c];
-            size_t br = bottom_row[c+1];
-            size_t tr = top_row[c+1];
+    void triangulateStrip(const std::span<const size_t>& top_row,
+                          const std::span<const size_t>& bottom_row) {
+        for (size_t c = 0; c < cols_ - 1; ++c) {
+            const size_t tl = top_row[c];
+            const size_t bl = bottom_row[c];
+            const size_t br = bottom_row[c+1];
+            const size_t tr = top_row[c+1];
 
-            size_t t1_idx = active_triangles_.size();
+            const size_t t1_idx = active_triangles_.size();
             active_triangles_.emplace_back(tl, bl, br);
 
-            size_t t2_idx = active_triangles_.size();
+            const size_t t2_idx = active_triangles_.size();
             active_triangles_.emplace_back(tl, br, tr);
 
             // Build edge-to-triangle map using spatial hash for fast lookups
@@ -316,8 +316,8 @@ private:
     }
 
     void addEdgeToMap(size_t a, size_t b, size_t tri_idx) {
-        Edge e(a, b);
-        edge_to_triangles_[e].push_back(tri_idx);
+        Edge edge(a, b);
+        edge_to_triangles_[edge].push_back(tri_idx);
     }
 
     const std::vector<size_t>* getTrianglesForEdge(size_t a, size_t b) const {
@@ -332,24 +332,24 @@ private:
 
         // Move finalized triangles out and deallocate (updates edge map incrementally)
         for (size_t i = 0; i < active_triangles_.size(); ++i) {
-            if (!active_triangles_[i].active) continue;
-
             const auto& tri = active_triangles_[i];
-            int min_row = std::min({
+            if (!tri.active) continue;
+
+            const auto min_row = std::min({
                 all_points_[tri.v0].row,
                 all_points_[tri.v1].row,
                 all_points_[tri.v2].row
             });
 
-            if (min_row < static_cast<int>(finalize_until_row)) {
+            if (min_row < finalize_until_row) {
                 finalized_triangles_.push_back(tri);
                 deallocateTriangle(i);
             }
         }
 
         // Clear finalized row from quantized grid
-        for (int c = 0; c < cols_; ++c) {
-            active_grid_[gridIndex(finalized_row_, c)] = -1;
+        for (size_t column = 0; column < cols_; ++column) {
+            active_grid_[gridIndex(finalized_row_, column)] = -1;
         }
 
         ++finalized_row_;
@@ -363,14 +363,13 @@ private:
         // Compute errors using fast edge-map neighbor lookups
         for (size_t i = 0; i < active_triangles_.size(); ++i) {
             if (active_triangles_[i].active) {
-                active_triangles_[i].error = computeTriangleErrorFast(i);
+                active_triangles_[i].error = computeTriangleError(i);
             }
         }
 
-        size_t target_count = static_cast<size_t>(
+        const size_t target_count = std::max(static_cast<size_t>(
             active_triangle_count_ * (1.0 - target_reduction_)
-        );
-        target_count = std::max(target_count, size_t(cols_ * 2));
+        ), size_t(cols_ * 2));
 
         // Priority queue over active triangles only
         using QueueItem = std::pair<double, size_t>;
@@ -383,20 +382,20 @@ private:
         }
 
         while (!pq.empty() && active_triangle_count_ > target_count) {
-            auto [err, idx] = pq.top();
+            const auto [err, idx] = pq.top();
             pq.pop();
 
             if (!active_triangles_[idx].active) continue;
 
             const auto& tri = active_triangles_[idx];
-            int max_row = std::max({
+            const auto max_row = std::max({
                 all_points_[tri.v0].row,
                 all_points_[tri.v1].row,
                 all_points_[tri.v2].row
             });
 
-            if (max_row >= static_cast<int>(end_row)) continue;
-            if (!canRemoveTriangleFast(idx)) continue;
+            if (max_row >= end_row) continue;
+            if (!canRemoveTriangle(idx)) continue;
 
             if (err < error_threshold_) {
                 deallocateTriangle(idx);  // Incremental edge map update
@@ -406,31 +405,31 @@ private:
     }
 
     // Fast error computation using spatial hash for neighborhood queries
-    double computeTriangleErrorFast(size_t tri_idx) const {
+    double computeTriangleError(size_t tri_idx) const {
         const auto& tri = active_triangles_[tri_idx];
         const Point& p0 = all_points_[tri.v0];
         const Point& p1 = all_points_[tri.v1];
         const Point& p2 = all_points_[tri.v2];
 
         // Normal
-        double ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
-        double bx = p2.x - p0.x, by = p2.y - p0.y, bz = p2.z - p0.z;
+        const double ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
+        const double bx = p2.x - p0.x, by = p2.y - p0.y, bz = p2.z - p0.z;
 
         double nx = ay * bz - az * by;
         double ny = az * bx - ax * bz;
         double nz = ax * by - ay * bx;
-        double len = std::sqrt(nx*nx + ny*ny + nz*nz);
+        const double len = std::sqrt(nx*nx + ny*ny + nz*nz);
 
         if (len < 1e-10) return std::numeric_limits<double>::max();
 
         nx /= len; ny /= len; nz /= len;
-        double area = 0.5 * len;
+        const double area = 0.5 * len;
 
         // Fast dihedral computation via edge map (O(1) per edge)
         double max_dihedral = 0.0;
 
         auto checkEdge = [&](size_t a, size_t b) {
-            auto tris = getEdgeTris(a, b);
+            const auto tris = getEdgeTris(a, b);
             if (!tris) return;
             for (size_t ot : *tris) {
                 if (ot == tri_idx || !active_triangles_[ot].active) continue;
@@ -440,17 +439,21 @@ private:
                 const Point& op1 = all_points_[other.v1];
                 const Point& op2 = all_points_[other.v2];
 
-                double oax = op1.x - op0.x, oay = op1.y - op0.y, oaz = op1.z - op0.z;
-                double obx = op2.x - op0.x, oby = op2.y - op0.y, obz = op2.z - op0.z;
+                const double oax = op1.x - op0.x;
+                const double oay = op1.y - op0.y;
+                const double oaz = op1.z - op0.z;
+                const double obx = op2.x - op0.x;
+                const double oby = op2.y - op0.y;
+                const double obz = op2.z - op0.z;
 
                 double onx = oay * obz - oaz * oby;
                 double ony = oaz * obx - oax * obz;
                 double onz = oax * oby - oay * obx;
-                double olen = std::sqrt(onx*onx + ony*ony + onz*onz);
+                const double olen = std::sqrt(onx*onx + ony*ony + onz*onz);
 
                 if (olen > 1e-10) {
                     onx /= olen; ony /= olen; onz /= olen;
-                    double dot = std::abs(nx * onx + ny * ony + nz * onz);
+                    const double dot = std::abs(nx * onx + ny * ony + nz * onz);
                     max_dihedral = std::max(max_dihedral, std::acos(std::clamp(dot, -1.0, 1.0)));
                 }
             }
@@ -461,7 +464,7 @@ private:
         checkEdge(tri.v2, tri.v0);
 
         // Height variation
-        double height_var = std::max({
+        const double height_var = std::max({
             std::abs(p0.z - p1.z),
             std::abs(p1.z - p2.z),
             std::abs(p2.z - p0.z)
@@ -472,11 +475,11 @@ private:
     }
 
     // Fast manifold preservation check using spatial hash
-    bool canRemoveTriangleFast(size_t idx) const {
+    bool canRemoveTriangle(size_t idx) const {
         const auto& tri = active_triangles_[idx];
 
         auto hasActiveNeighbor = [&](size_t a, size_t b) -> bool {
-            auto tris = getEdgeTris(a, b);
+            const auto tris = getEdgeTris(a, b);
             if (!tris) return false;
             for (size_t t : *tris) {
                 if (t != idx && active_triangles_[t].active) return true;
@@ -541,7 +544,7 @@ private:
     double error_threshold_;
 
     // DEM state
-    int cols_;
+    size_t cols_;
     size_t current_row_;
     size_t finalized_row_;
     double cell_size_x_, cell_size_y_;
@@ -564,7 +567,7 @@ private:
 };
 
 Triangulator::Kimi::DEMTriangulationResult Triangulator::Kimi::triangulateDEM(
-    int rows, int cols,
+    int rows, size_t cols,
     const double* heights,
     double cell_size_x,
     double cell_size_y,
@@ -578,7 +581,7 @@ Triangulator::Kimi::DEMTriangulationResult Triangulator::Kimi::triangulateDEM(
 
     for (int r = 0; r < rows; ++r) {
         // Extract row from column-major array
-        for (int c = 0; c < cols; ++c) {
+        for (size_t c = 0; c < cols; ++c) {
             row[c] = heights[r * cols + c];
         }
         triangulator.addRow(row);
@@ -628,35 +631,6 @@ bool Triangulator::Kimi::writePLY(const std::string& filename,
     file.close();
     return file.good();
 }
-
-// While this is a work-in-progress this contains the main program rather than
-// allowing this to be used as a library.
-#if 0
-int main2(int argc, const char* argv[])
-{
-    try
-    {
-        const char* filename = (argc > 1) ? argv[1] : "N03W074.hgt";
-        const auto [latitude, longitude] =
-            HGT::LocationFromHgtName(filename);
-        std::cout << latitude << ", " << longitude << std::endl;
-
-        // TODO: Generate the mesh.
-        HGT::ForEachHeightWithIndex(
-            filename,
-            [](auto X, auto Y, auto Height)
-            {
-                std::cout << X << "," << Y << "," << Height << "\n";
-            });
-    }
-    catch (const std::runtime_error& Error)
-    {
-        std::cerr << Error.what() << std::endl;
-        return 1;
-    }
-    return 0;
-}
-#endif
 
 #ifdef KIMI_MAIN
 

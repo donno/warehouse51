@@ -18,11 +18,11 @@ namespace Triangulator
     {
         struct Point {
             double x, y, z;
-            int row, col; // Source DEM coordinates (for reconstruction/debugging)
+            size_t row, col; // Source DEM coordinates (for reconstruction/debugging)
             size_t index; // Index in output points array
             bool active;            // For lazy deletion during simplification
 
-            Point(double x_, double y_, double z_, int r, int c, size_t idx)
+            Point(double x_, double y_, double z_, size_t r, size_t c, size_t idx)
                 : x(x_), y(y_), z(z_), row(r), col(c), index(idx), active(true)
                 {}
         };
@@ -47,7 +47,7 @@ namespace Triangulator
         // heights: column-major array of size rows * cols
         //          (i.e., heights[row * cols + col])
         DEMTriangulationResult triangulateDEM(
-            int rows, int cols,
+            int rows, size_t cols,
             const double* heights,
             double cell_size_x = 1.0,
             double cell_size_y = 1.0,
