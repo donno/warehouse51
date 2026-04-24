@@ -20,17 +20,20 @@ namespace Triangulator
             double x, y, z;
             int row, col; // Source DEM coordinates (for reconstruction/debugging)
             size_t index; // Index in output points array
+            bool active;            // For lazy deletion during simplification
 
             Point(double x_, double y_, double z_, int r, int c, size_t idx)
-                : x(x_), y(y_), z(z_), row(r), col(c), index(idx) {}
+                : x(x_), y(y_), z(z_), row(r), col(c), index(idx), active(true)
+                {}
         };
 
         struct Triangle {
             size_t v0, v1, v2;      // Indices into points array
             double error;           // Geometric error metric for simplification
+            bool active;
 
             Triangle(size_t a, size_t b, size_t c)
-                : v0(a), v1(b), v2(c), error(0.0) {}
+                : v0(a), v1(b), v2(c), error(0.0), active(true) {}
         };
 
         struct DEMTriangulationResult {
