@@ -36,6 +36,8 @@
 //    - Increased simplification factor.
 //   - 87.8% spent in canRemoveTriangleFast.
 //   - There were 1335315 vertices out of a 12967201 and 2660689 facets.
+// - Runtime acceptable - 402 seconds (just inder 7 minutes) for single HGT.
+//   - Replaced the version that doesn't hash the X and Y coordinates.
 //===----------------------------------------------------------------------===//
 
 #include "triangulator_kimi.hpp"
@@ -57,98 +59,6 @@
 
 using Triangulator::Kimi::Point;
 using Triangulator::Kimi::Triangle;
-
-// Spatial Hash for Fast Neighbor Lookups.
-class SpatialHash {
-public:
-    SpatialHash(double cellSize = 1.0) : cellSize_(cellSize), invCellSize_(1.0 / cellSize) {}
-
-    void clear() {
-        grid_.clear();
-    }
-
-    // Insert a point with its index
-    void insert(double x, double y, size_t index) {
-        auto key = hash(x, y);
-        grid_[key].push_back(index);
-    }
-
-    // Insert a point using integer grid coordinates (for DEM cells)
-    void insert(int row, int col, size_t index) {
-        auto key = hashInt(row, col);
-        grid_[key].push_back(index);
-    }
-
-    // Find all points within radius of (x, y)
-    void queryRadius(double x, double y, double radius, std::vector<size_t>& out) const {
-        out.clear();
-        int rCells = static_cast<int>(std::ceil(radius * invCellSize_));
-        int cx = static_cast<int>(std::floor(x * invCellSize_));
-        int cy = static_cast<int>(std::floor(y * invCellSize_));
-
-        for (int dy = -rCells; dy <= rCells; ++dy) {
-            for (int dx = -rCells; dx <= rCells; ++dx) {
-                auto it = grid_.find(hashInt(cx + dx, cy + dy));
-                if (it != grid_.end()) {
-                    out.insert(out.end(), it->second.begin(), it->second.end());
-                }
-            }
-        }
-    }
-
-    // Query by integer grid cell and immediate neighbors (8-connected)
-    void queryNeighbors(int row, int col, std::vector<size_t>& out) const {
-        out.clear();
-        for (int dr = -1; dr <= 1; ++dr) {
-            for (int dc = -1; dc <= 1; ++dc) {
-                auto it = grid_.find(hashInt(row + dr, col + dc));
-                if (it != grid_.end()) {
-                    out.insert(out.end(), it->second.begin(), it->second.end());
-                }
-            }
-        }
-    }
-
-    // Get all points in a specific cell
-    const std::vector<size_t>* getCell(int row, int col) const {
-        auto it = grid_.find(hashInt(row, col));
-        return (it != grid_.end()) ? &it->second : nullptr;
-    }
-
-    // Remove a point (mark as removed - lazy deletion)
-    void remove(int row, int col, size_t index) {
-        auto key = hashInt(row, col);
-        auto it = grid_.find(key);
-        if (it != grid_.end()) {
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), index), vec.end());
-            if (vec.empty()) grid_.erase(it);
-        }
-    }
-
-private:
-    using Key = int64_t;
-
-    double cellSize_;
-    double invCellSize_;
-    std::unordered_map<Key, std::vector<size_t>> grid_;
-
-    Key hash(double x, double y) const {
-        int ix = static_cast<int>(std::floor(x * invCellSize_));
-        int iy = static_cast<int>(std::floor(y * invCellSize_));
-        return hashInt(ix, iy);
-    }
-
-    static Key hashInt(int x, int y) {
-        // Szudzik pairing for 2D->1D with signed support
-        int32_t ux = static_cast<int32_t>(x);
-        int32_t uy = static_cast<int32_t>(y);
-        uint64_t a = (ux >= 0) ? 2 * static_cast<uint64_t>(ux) : -2 * static_cast<uint64_t>(ux) - 1;
-        uint64_t b = (uy >= 0) ? 2 * static_cast<uint64_t>(uy) : -2 * static_cast<uint64_t>(uy) - 1;
-        uint64_t c = (a >= b) ? a * a + a + b : a + b * b;
-        return static_cast<Key>(c);
-    }
-};
 
 struct Edge {
     size_t v0, v1;
@@ -188,7 +98,7 @@ public:
         , finalized_row_(0)
         , cell_size_x_(1.0)
         , cell_size_y_(1.0)
-        , vertex_spatial_hash_(1.0)  // Cell size = 1 DEM cell
+        , active_triangle_count_(0)
         {}
 
     // Initialize with DEM dimensions and cell sizes
@@ -198,12 +108,16 @@ public:
         cell_size_y_ = cell_size_y;
         current_row_ = 0;
         finalized_row_ = 0;
+        active_triangle_count_ = 0;
 
         all_points_.clear();
         active_triangles_.clear();
         finalized_triangles_.clear();
         edge_to_triangles_.clear();
-        vertex_spatial_hash_.clear();
+        free_triangle_slots_.clear();
+
+        // Quantized grid: direct array lookup for O(1) neighbor access
+        active_grid_.assign(max_active_rows_ * cols_, -1);
 
         // Reserve space to avoid reallocations
         all_points_.reserve(cols_ * max_active_rows_ * 2);
@@ -233,8 +147,8 @@ public:
             );
             new_point_indices.push_back(idx);
 
-            // Insert into spatial hash for fast neighbor queries
-            vertex_spatial_hash_.insert(static_cast<int>(current_row_), c, idx);
+            // Quantized insert: direct array indexing, no hash computation
+            active_grid_[gridIndex(current_row_, c)] = static_cast<int64_t>(idx);
         }
 
         // Triangulate with previous row if available
@@ -243,11 +157,10 @@ public:
         }
 
         // Update row tracking
-        prev_row_indices_ = new_point_indices;
-        row_point_indices_.push_back(std::move(new_point_indices));
+        prev_row_indices_ = std::move(new_point_indices);
 
         // Simplify active region if window is full
-        if (row_point_indices_.size() >= max_active_rows_) {
+        if (current_row_ >= finalized_row_ + max_active_rows_) {
             simplifyAndFinalize();
         }
 
@@ -280,6 +193,101 @@ public:
     }
 
 private:
+    // -------------------------------------------------------------------------
+    // Quantized Grid: O(1) direct lookup via (row % max_active_rows, col)
+    // -------------------------------------------------------------------------
+
+    size_t gridIndex(int row, int col) const {
+        return static_cast<size_t>((row % static_cast<int>(max_active_rows_)) * cols_ + col);
+    }
+
+    int64_t getGridVertex(int row, int col) const {
+        if (row < static_cast<int>(finalized_row_) || row >= static_cast<int>(current_row_)) return -1;
+        if (col < 0 || col >= cols_) return -1;
+        return active_grid_[gridIndex(row, col)];
+    }
+
+    void getVertexNeighbors(size_t v, std::vector<size_t>& out) const {
+        out.clear();
+        const Point& p = all_points_[v];
+        for (int dr = -1; dr <= 1; ++dr) {
+            for (int dc = -1; dc <= 1; ++dc) {
+                if (dr == 0 && dc == 0) continue;
+                int64_t vi = getGridVertex(p.row + dr, p.col + dc);
+                if (vi >= 0) out.push_back(static_cast<size_t>(vi));
+            }
+        }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Incremental Triangle Allocation/Deallocation
+    // -------------------------------------------------------------------------
+    size_t allocateTriangle(size_t a, size_t b, size_t c) {
+        size_t idx;
+        if (!free_triangle_slots_.empty()) {
+            idx = free_triangle_slots_.back();
+            free_triangle_slots_.pop_back();
+            active_triangles_[idx] = Triangle(a, b, c);
+            active_triangles_[idx].active = true;
+        } else {
+            idx = active_triangles_.size();
+            active_triangles_.emplace_back(a, b, c);
+        }
+
+        // Incremental edge map update: add immediately on allocation
+        addEdge(a, b, idx);
+        addEdge(b, c, idx);
+        addEdge(c, a, idx);
+        ++active_triangle_count_;
+        return idx;
+    }
+
+    void deallocateTriangle(size_t idx) {
+        if (!active_triangles_[idx].active) return;
+
+        const auto& tri = active_triangles_[idx];
+
+        // Incremental edge map update: remove immediately on deallocation
+        removeEdgeTri(tri.v0, tri.v1, idx);
+        removeEdgeTri(tri.v1, tri.v2, idx);
+        removeEdgeTri(tri.v2, tri.v0, idx);
+
+        active_triangles_[idx].active = false;
+        free_triangle_slots_.push_back(idx);
+        --active_triangle_count_;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Edge Map: O(1) average lookups, incrementally maintained
+    // -------------------------------------------------------------------------
+
+    void addEdge(size_t a, size_t b, size_t tri_idx) {
+        edge_to_triangles_[Edge(a, b)].push_back(tri_idx);
+    }
+
+    void removeEdgeTri(size_t a, size_t b, size_t tri_idx) {
+        auto it = edge_to_triangles_.find(Edge(a, b));
+        if (it == edge_to_triangles_.end()) return;
+
+        auto& vec = it->second;
+        // O(1) swap-pop removal; edges typically have low valence (1-2)
+        for (size_t i = 0; i < vec.size(); ++i) {
+            if (vec[i] == tri_idx) {
+                vec[i] = vec.back();
+                vec.pop_back();
+                break;
+            }
+        }
+        if (vec.empty()) edge_to_triangles_.erase(it);
+    }
+
+    const std::vector<size_t>* getEdgeTris(size_t a, size_t b) const {
+        auto it = edge_to_triangles_.find(Edge(a, b));
+        return (it != edge_to_triangles_.end()) ? &it->second : nullptr;
+    }
+
     // Triangulate between two rows using standard strip pattern
     // Creates triangles in consistent winding order
     void triangulateStrip(const std::vector<size_t>& top_row,
@@ -317,20 +325,16 @@ private:
         return (it != edge_to_triangles_.end()) ? &it->second : nullptr;
     }
 
-    // Simplify the oldest portion of the active region and move to finalized
     void simplifyAndFinalize() {
-        // Determine how many rows to finalize (typically 1, but can batch)
-        size_t rows_to_finalize = 1;
-        size_t finalize_until_row = finalized_row_ + rows_to_finalize;
+        size_t finalize_until_row = finalized_row_ + 1;
 
-        // Run simplification on active triangles
         simplifyActiveRegion(finalized_row_, finalize_until_row);
 
-        // Move triangles that are entirely before finalize_until_row to finalized
-        std::vector<Triangle> new_active;
-        new_active.reserve(active_triangles_.size());
+        // Move finalized triangles out and deallocate (updates edge map incrementally)
+        for (size_t i = 0; i < active_triangles_.size(); ++i) {
+            if (!active_triangles_[i].active) continue;
 
-        for (auto& tri : active_triangles_) {
+            const auto& tri = active_triangles_[i];
             int min_row = std::min({
                 all_points_[tri.v0].row,
                 all_points_[tri.v1].row,
@@ -339,57 +343,36 @@ private:
 
             if (min_row < static_cast<int>(finalize_until_row)) {
                 finalized_triangles_.push_back(tri);
-            } else {
-                new_active.push_back(tri);
+                deallocateTriangle(i);
             }
         }
 
-        active_triangles_ = std::move(new_active);
-
-        // Clean up spatial hash for finalized rows
-        cleanupSpatialHash(finalize_until_row);
-
-        // Clean up point indices for finalized rows to allow GC
-        if (!row_point_indices_.empty()) {
-            row_point_indices_.erase(row_point_indices_.begin(),
-                                     row_point_indices_.begin() + rows_to_finalize);
+        // Clear finalized row from quantized grid
+        for (int c = 0; c < cols_; ++c) {
+            active_grid_[gridIndex(finalized_row_, c)] = -1;
         }
 
-        finalized_row_ = finalize_until_row;
-    }
-
-    void cleanupSpatialHash(size_t finalized_until_row) {
-        // Remove finalized rows from spatial hash to save memory
-        for (auto& p : all_points_) {
-            if (p.row < static_cast<int>(finalized_until_row) && p.active) {
-                vertex_spatial_hash_.remove(p.row, p.col, p.index);
-                p.active = false;
-            }
-        }
+        ++finalized_row_;
     }
 
     // Quadric Error Metric (QEM) based simplification
     // This is a lightweight version suitable for incremental processing
-    void simplifyActiveRegion(size_t start_row, size_t end_row) {
-        if (active_triangles_.size() < 10) return;
+   void simplifyActiveRegion(size_t start_row, size_t end_row) {
+        if (active_triangle_count_ < 10) return;
 
-        // Compute error for each triangle using fast neighbor lookups
-        static thread_local std::vector<size_t> neighbors;
-
-        for (auto& tri : active_triangles_) {
-            if (!tri.active) continue;
-            tri.error = computeTriangleErrorFast(tri, neighbors);
+        // Compute errors using fast edge-map neighbor lookups
+        for (size_t i = 0; i < active_triangles_.size(); ++i) {
+            if (active_triangles_[i].active) {
+                active_triangles_[i].error = computeTriangleErrorFast(i);
+            }
         }
 
         size_t target_count = static_cast<size_t>(
-            active_triangles_.size() * (1.0 - target_reduction_)
+            active_triangle_count_ * (1.0 - target_reduction_)
         );
         target_count = std::max(target_count, size_t(cols_ * 2));
 
-        std::vector<bool> removed(active_triangles_.size(), false);
-        size_t removed_count = 0;
-
-        // Priority queue ordered by error
+        // Priority queue over active triangles only
         using QueueItem = std::pair<double, size_t>;
         std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<QueueItem>> pq;
 
@@ -399,16 +382,13 @@ private:
             }
         }
 
-        // Greedy edge collapse using spatial hash for validation
-        while (!pq.empty() && removed_count < active_triangles_.size() - target_count) {
+        while (!pq.empty() && active_triangle_count_ > target_count) {
             auto [err, idx] = pq.top();
             pq.pop();
 
-            if (removed[idx] || !active_triangles_[idx].active) continue;
+            if (!active_triangles_[idx].active) continue;
 
             const auto& tri = active_triangles_[idx];
-
-            // Check row constraints
             int max_row = std::max({
                 all_points_[tri.v0].row,
                 all_points_[tri.v1].row,
@@ -416,77 +396,18 @@ private:
             });
 
             if (max_row >= static_cast<int>(end_row)) continue;
-
-            // Fast manifold check using spatial hash neighbors
-            if (!canRemoveTriangleFast(tri, removed, neighbors)) continue;
+            if (!canRemoveTriangleFast(idx)) continue;
 
             if (err < error_threshold_) {
-                removed[idx] = true;
-                active_triangles_[idx].active = false;
-                ++removed_count;
+                deallocateTriangle(idx);  // Incremental edge map update
             }
         }
-
-        // Rebuild triangle list
-        std::vector<Triangle> new_active;
-        new_active.reserve(active_triangles_.size() - removed_count);
-
-        for (size_t i = 0; i < active_triangles_.size(); ++i) {
-            if (!removed[i] && active_triangles_[i].active) {
-                new_active.push_back(active_triangles_[i]);
-            }
-        }
-
-        active_triangles_ = std::move(new_active);
-
-        // Rebuild edge map for remaining active triangles
-        rebuildEdgeMap();
+        // NO rebuildEdgeMap() needed — indices remain stable via free-list reuse
     }
 
-    // Compute geometric error of a triangle relative to its neighborhood
-    double computeTriangleError(const Triangle& tri) {
-        const Point& p0 = all_points_[tri.v0];
-        const Point& p1 = all_points_[tri.v1];
-        const Point& p2 = all_points_[tri.v2];
-
-        // Normal of triangle
-        double ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
-        double bx = p2.x - p0.x, by = p2.y - p0.y, bz = p2.z - p0.z;
-
-        double nx = ay * bz - az * by;
-        double ny = az * bx - ax * bz;
-        double nz = ax * by - ay * bx;
-        double len = std::sqrt(nx*nx + ny*ny + nz*nz);
-
-        if (len < 1e-10) return std::numeric_limits<double>::max();
-
-        nx /= len; ny /= len; nz /= len;
-
-        // Planarity: how flat is the local neighborhood?
-        // Approximate by checking how much the centroid deviates from plane
-        double cx = (p0.x + p1.x + p2.x) / 3.0;
-        double cy = (p0.y + p1.y + p2.y) / 3.0;
-        double cz = (p0.z + p1.z + p2.z) / 3.0;
-
-        // Distance from origin to plane
-        double d = -(nx * p0.x + ny * p0.y + nz * p0.z);
-
-        // For error metric, use area-weighted deviation
-        double area = 0.5 * len;
-
-        // Also consider height variation - flat areas can be simplified more
-        double height_var = std::max({
-            std::abs(p0.z - p1.z),
-            std::abs(p1.z - p2.z),
-            std::abs(p2.z - p0.z)
-        });
-
-        // Error is low for small, flat triangles in smooth regions
-        return area * (1.0 + height_var) / (1.0 + height_var * height_var);
-    }
-
-  // Fast error computation using spatial hash for neighborhood queries
-    double computeTriangleErrorFast(const Triangle& tri, std::vector<size_t>& neighbors) const {
+    // Fast error computation using spatial hash for neighborhood queries
+    double computeTriangleErrorFast(size_t tri_idx) const {
+        const auto& tri = active_triangles_[tri_idx];
         const Point& p0 = all_points_[tri.v0];
         const Point& p1 = all_points_[tri.v1];
         const Point& p2 = all_points_[tri.v2];
@@ -505,20 +426,16 @@ private:
         nx /= len; ny /= len; nz /= len;
         double area = 0.5 * len;
 
-        // Fast neighborhood query: get adjacent triangles via edge map
+        // Fast dihedral computation via edge map (O(1) per edge)
         double max_dihedral = 0.0;
 
-        auto checkDihedral = [&](size_t a, size_t b, size_t c) {
-            auto tris = getTrianglesForEdge(a, b);
+        auto checkEdge = [&](size_t a, size_t b) {
+            auto tris = getEdgeTris(a, b);
             if (!tris) return;
             for (size_t ot : *tris) {
-                if (!active_triangles_[ot].active) continue;
-                const auto& other = active_triangles_[ot];
-                // Skip self
-                if (other.v0 == tri.v0 && other.v1 == tri.v1 && other.v2 == tri.v2) continue;
-                if (other.v0 == tri.v0 && other.v1 == tri.v2 && other.v2 == tri.v1) continue;
+                if (ot == tri_idx || !active_triangles_[ot].active) continue;
 
-                // Compute dihedral angle with neighbor
+                const auto& other = active_triangles_[ot];
                 const Point& op0 = all_points_[other.v0];
                 const Point& op1 = all_points_[other.v1];
                 const Point& op2 = all_points_[other.v2];
@@ -539,9 +456,9 @@ private:
             }
         };
 
-        checkDihedral(tri.v0, tri.v1, tri.v2);
-        checkDihedral(tri.v1, tri.v2, tri.v0);
-        checkDihedral(tri.v2, tri.v0, tri.v1);
+        checkEdge(tri.v0, tri.v1);
+        checkEdge(tri.v1, tri.v2);
+        checkEdge(tri.v2, tri.v0);
 
         // Height variation
         double height_var = std::max({
@@ -555,38 +472,21 @@ private:
     }
 
     // Fast manifold preservation check using spatial hash
-    bool canRemoveTriangleFast(const Triangle& tri,
-                                const std::vector<bool>& removed,
-                                std::vector<size_t>& neighbors) const {
-        // For each vertex, check if removing this triangle would create a boundary hole
-        // A triangle can be removed if each of its edges is shared by another active triangle
+    bool canRemoveTriangleFast(size_t idx) const {
+        const auto& tri = active_triangles_[idx];
 
-        auto hasActiveNeighbor = [&](size_t a, size_t b, size_t self_idx) -> bool {
-            auto tris = getTrianglesForEdge(a, b);
+        auto hasActiveNeighbor = [&](size_t a, size_t b) -> bool {
+            auto tris = getEdgeTris(a, b);
             if (!tris) return false;
             for (size_t t : *tris) {
-                if (t != self_idx && !removed[t] && active_triangles_[t].active) {
-                    return true;
-                }
+                if (t != idx && active_triangles_[t].active) return true;
             }
             return false;
         };
 
-        // Find index of tri in active_triangles_
-        size_t self_idx = 0;
-        for (size_t i = 0; i < active_triangles_.size(); ++i) {
-            if (active_triangles_[i].v0 == tri.v0 &&
-                active_triangles_[i].v1 == tri.v1 &&
-                active_triangles_[i].v2 == tri.v2) {
-                self_idx = i;
-                break;
-            }
-        }
-
-        // Check all three edges have active neighbors
-        return hasActiveNeighbor(tri.v0, tri.v1, self_idx) &&
-               hasActiveNeighbor(tri.v1, tri.v2, self_idx) &&
-               hasActiveNeighbor(tri.v2, tri.v0, self_idx);
+        return hasActiveNeighbor(tri.v0, tri.v1) &&
+               hasActiveNeighbor(tri.v1, tri.v2) &&
+               hasActiveNeighbor(tri.v2, tri.v0);
     }
 
     void rebuildEdgeMap() {
@@ -602,7 +502,6 @@ private:
     // Compact output: remap point indices to remove unused points
     void compactAndOutput(std::vector<Point>& out_points,
                           std::vector<Triangle>& out_triangles) {
-        // Find which points are referenced
         std::vector<bool> used(all_points_.size(), false);
 
         for (const auto& tri : finalized_triangles_) {
@@ -611,17 +510,13 @@ private:
             used[tri.v2] = true;
         }
 
-        // Create remapping
         std::vector<size_t> remap(all_points_.size(), static_cast<size_t>(-1));
         size_t new_idx = 0;
 
         for (size_t i = 0; i < all_points_.size(); ++i) {
-            if (used[i]) {
-                remap[i] = new_idx++;
-            }
+            if (used[i]) remap[i] = new_idx++;
         }
 
-        // Output compacted points
         out_points.clear();
         out_points.reserve(new_idx);
 
@@ -633,19 +528,13 @@ private:
             }
         }
 
-        // Output remapped triangles
         out_triangles.clear();
         out_triangles.reserve(finalized_triangles_.size());
 
         for (const auto& tri : finalized_triangles_) {
-            out_triangles.emplace_back(
-                remap[tri.v0],
-                remap[tri.v1],
-                remap[tri.v2]
-            );
+            out_triangles.emplace_back(remap[tri.v0], remap[tri.v1], remap[tri.v2]);
         }
     }
-
     // Configuration
     size_t max_active_rows_;
     double target_reduction_;
@@ -663,10 +552,15 @@ private:
     std::vector<Triangle> finalized_triangles_;
     std::vector<size_t> prev_row_indices_;
 
-    // Fast lookup structures
-    SpatialHash vertex_spatial_hash_;
+    // Quantized grid: direct (row, col) → vertex index mapping
+    std::vector<int64_t> active_grid_;
+
+    // Incremental edge map: no full rebuilds needed
     std::unordered_map<Edge, std::vector<size_t>, EdgeHash> edge_to_triangles_;
-    std::vector<std::vector<size_t>> row_point_indices_;
+
+    // Free-list for stable triangle indices
+    std::vector<size_t> free_triangle_slots_;
+    size_t active_triangle_count_;
 };
 
 Triangulator::Kimi::DEMTriangulationResult Triangulator::Kimi::triangulateDEM(
