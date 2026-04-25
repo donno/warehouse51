@@ -16,6 +16,8 @@ namespace Triangulator
 {
     namespace Kimi
     {
+        static constexpr size_t INVALID = static_cast<size_t>(-1);
+
         struct Point {
             double x, y, z;
             size_t row, col; // Source DEM coordinates (for reconstruction/debugging)
@@ -28,12 +30,15 @@ namespace Triangulator
         };
 
         struct Triangle {
-            size_t v0, v1, v2;      // Indices into points array
-            double error;           // Geometric error metric for simplification
+            size_t v0, v1, v2;   // Indices into points array
+            size_t n0, n1, n2;   // Neighbor tri indices across edges (v0,v1), (v1,v2), (v2,v0)
+            double error;        // Geometric error metric for simplification
             bool active;
 
             Triangle(size_t a, size_t b, size_t c)
-                : v0(a), v1(b), v2(c), error(0.0), active(true) {}
+            : v0(a), v1(b), v2(c)
+            , n0(INVALID), n1(INVALID), n2(INVALID)
+            , error(0.0), active(true) {}
         };
 
         struct DEMTriangulationResult {

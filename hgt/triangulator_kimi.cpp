@@ -38,6 +38,13 @@
 //   - There were 1335315 vertices out of a 12967201 and 2660689 facets.
 // - Runtime acceptable - 402 seconds (just under 7 minutes) for single HGT.
 //   - Replaced the version that doesn't hash the X and Y coordinates.
+// - Runtime after this latest prompt - 240 seconds for single HGT.
+//     Go ahead and eliminate the edge map entirely.
+//   - 36% time in std::priority_queue::pop()
+//   - 21% in simplifyActiveRegion
+//   - 10% in checkNeighbor() within computeTriangleError().
+//  - There were 1442401 vertices out of 12967201 and 2882400 facets.
+//
 //===----------------------------------------------------------------------===//
 
 #include "triangulator_kimi.hpp"
@@ -112,17 +119,23 @@ public:
         all_points_.clear();
         active_triangles_.clear();
         finalized_triangles_.clear();
-        edge_to_triangles_.clear();
         free_triangle_slots_.clear();
 
         // Quantized grid: direct array lookup for O(1) neighbor access
         active_grid_.assign(max_active_rows_ * cols_, -1);
 
+        // Flat edge arrays: 2 triangle indices per edge slot (manifold = max 2)
+        // Vertical edges: between (r,c) and (r+1,c)
+        vert_edges_.assign(max_active_rows_ * cols_ * 2, INVALID);
+        // Horizontal edges: between (r,c) and (r,c+1)
+        horiz_edges_.assign(max_active_rows_ * (cols_ - 1) * 2, INVALID);
+        // Diagonal edges: between (r,c) and (r+1,c+1)
+        diag_edges_.assign(max_active_rows_ * (cols_ - 1) * 2, INVALID);
+
         // Reserve space to avoid reallocations
         all_points_.reserve(cols_ * max_active_rows_ * 2);
         active_triangles_.reserve(cols_ * max_active_rows_ * 2);
         finalized_triangles_.reserve(cols_ * max_active_rows_ * 2);
-        edge_to_triangles_.reserve(cols_ * max_active_rows_ * 2);
     }
 
     // Process a new row of height data (column-major: heights[col] for this row)
@@ -189,7 +202,11 @@ public:
     size_t memoryEstimate() const {
         return all_points_.capacity() * sizeof(Point) +
                active_triangles_.capacity() * sizeof(Triangle) +
-               finalized_triangles_.capacity() * sizeof(Triangle);
+               finalized_triangles_.capacity() * sizeof(Triangle) +
+               active_grid_.size() * sizeof(int64_t) +
+               vert_edges_.size() * sizeof(size_t) +
+               horiz_edges_.size() * sizeof(size_t) +
+               diag_edges_.size() * sizeof(size_t);
     }
 
 private:
@@ -219,9 +236,101 @@ private:
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Edge classification & slot access
+    // Every edge in the grid falls into one of three categories:
+    //   0 = vertical:   (r,c) -- (r+1,c)
+    //   1 = horizontal: (r,c) -- (r,c+1)
+    //   2 = diagonal:   (r,c) -- (r+1,c+1)
+    // -------------------------------------------------------------------------
+
+    struct EdgeLoc {
+        uint8_t type; // 0=vert, 1=horiz, 2=diag
+        size_t row;
+        size_t col;
+    };
+
+    EdgeLoc classifyEdge(size_t va, size_t vb) const {
+        const Point& a = all_points_[va];
+        const Point& b = all_points_[vb];
+        const int dr = static_cast<int>(b.row) - static_cast<int>(a.row);
+        const int dc = static_cast<int>(b.col) - static_cast<int>(a.col);
+
+        if (dr == 1) {
+            if (dc == 0) return {0, a.row, a.col};
+            return {2, a.row, a.col};           // dc == 1
+        }
+        if (dr == -1) {
+            if (dc == 0) return {0, b.row, b.col};
+            return {2, b.row, b.col};           // dc == -1
+        }
+        // dr == 0
+        if (dc == 1) return {1, a.row, a.col};
+        return {1, b.row, b.col};               // dc == -1
+    }
+
+    size_t* edgeSlot(const EdgeLoc& loc) {
+        int mr = loc.row % static_cast<int>(max_active_rows_);
+        if (mr < 0) mr += static_cast<int>(max_active_rows_);
+        size_t base = static_cast<size_t>(mr);
+
+        switch (loc.type) {
+            case 0:  return &vert_edges_[(base * cols_ + loc.col) * 2];
+            case 1:  return &horiz_edges_[(base * (cols_ - 1) + loc.col) * 2];
+            default: return &diag_edges_[(base * (cols_ - 1) + loc.col) * 2];
+        }
+    }
+
+    const size_t* edgeSlot(const EdgeLoc& loc) const {
+        int mr = loc.row % static_cast<int>(max_active_rows_);
+        if (mr < 0) mr += static_cast<int>(max_active_rows_);
+        size_t base = static_cast<size_t>(mr);
+
+        switch (loc.type) {
+            case 0:  return &vert_edges_[(base * cols_ + loc.col) * 2];
+            case 1:  return &horiz_edges_[(base * (cols_ - 1) + loc.col) * 2];
+            default: return &diag_edges_[(base * (cols_ - 1) + loc.col) * 2];
+        }
+    }
+
+    // Add triangle to edge slot (max 2 triangles per edge in manifold mesh)
+    void addTriToEdge(size_t va, size_t vb, size_t tri) {
+        size_t* slot = edgeSlot(classifyEdge(va, vb));
+        if (slot[0] == INVALID) slot[0] = tri;
+        else                    slot[1] = tri;
+    }
+
+    // Remove triangle from edge slot
+    void removeTriFromEdge(size_t va, size_t vb, size_t tri) {
+        size_t* slot = edgeSlot(classifyEdge(va, vb));
+        if (slot[0] == tri) {
+            slot[0] = slot[1];
+            slot[1] = INVALID;
+        } else if (slot[1] == tri) {
+            slot[1] = INVALID;
+        }
+    }
+
+    // Check if edge has another active triangle besides 'self'
+    bool edgeHasOther(const EdgeLoc& loc, size_t self) const {
+        const size_t* slot = edgeSlot(loc);
+        size_t t0 = slot[0], t1 = slot[1];
+        if (t0 != INVALID && t0 != self && active_triangles_[t0].active) return true;
+        if (t1 != INVALID && t1 != self && active_triangles_[t1].active) return true;
+        return false;
+    }
+
+    // Get the other active triangle on this edge (INVALID if none)
+    size_t edgeOther(const EdgeLoc& loc, size_t self) const {
+        const size_t* slot = edgeSlot(loc);
+        size_t t0 = slot[0], t1 = slot[1];
+        if (t0 != INVALID && t0 != self && active_triangles_[t0].active) return t0;
+        if (t1 != INVALID && t1 != self && active_triangles_[t1].active) return t1;
+        return INVALID;
+    }
 
     // -------------------------------------------------------------------------
-    // Incremental Triangle Allocation/Deallocation
+    // Incremental Triangle Allocation/Deallocation with free-list reuse.
     // -------------------------------------------------------------------------
     size_t allocateTriangle(size_t a, size_t b, size_t c) {
         size_t idx;
@@ -234,11 +343,6 @@ private:
             idx = active_triangles_.size();
             active_triangles_.emplace_back(a, b, c);
         }
-
-        // Incremental edge map update: add immediately on allocation
-        addEdge(a, b, idx);
-        addEdge(b, c, idx);
-        addEdge(c, a, idx);
         ++active_triangle_count_;
         return idx;
     }
@@ -247,47 +351,19 @@ private:
         if (!active_triangles_[idx].active) return;
 
         const auto& tri = active_triangles_[idx];
-
-        // Incremental edge map update: remove immediately on deallocation
-        removeEdgeTri(tri.v0, tri.v1, idx);
-        removeEdgeTri(tri.v1, tri.v2, idx);
-        removeEdgeTri(tri.v2, tri.v0, idx);
+        removeTriFromEdge(tri.v0, tri.v1, idx);
+        removeTriFromEdge(tri.v1, tri.v2, idx);
+        removeTriFromEdge(tri.v2, tri.v0, idx);
 
         active_triangles_[idx].active = false;
         free_triangle_slots_.push_back(idx);
         --active_triangle_count_;
     }
 
-
     // -------------------------------------------------------------------------
-    // Edge Map: O(1) average lookups, incrementally maintained
+    // Triangulation
     // -------------------------------------------------------------------------
-
-    void addEdge(size_t a, size_t b, size_t tri_idx) {
-        edge_to_triangles_[Edge(a, b)].push_back(tri_idx);
-    }
-
-    void removeEdgeTri(size_t a, size_t b, size_t tri_idx) {
-        auto it = edge_to_triangles_.find(Edge(a, b));
-        if (it == edge_to_triangles_.end()) return;
-
-        auto& vec = it->second;
-        // O(1) swap-pop removal; edges typically have low valence (1-2)
-        for (size_t i = 0; i < vec.size(); ++i) {
-            if (vec[i] == tri_idx) {
-                vec[i] = vec.back();
-                vec.pop_back();
-                break;
-            }
-        }
-        if (vec.empty()) edge_to_triangles_.erase(it);
-    }
-
-    const std::vector<size_t>* getEdgeTris(size_t a, size_t b) const {
-        auto it = edge_to_triangles_.find(Edge(a, b));
-        return (it != edge_to_triangles_.end()) ? &it->second : nullptr;
-    }
-
+    //
     // Triangulate between two rows using standard strip pattern
     // Creates triangles in consistent winding order
     void triangulateStrip(const std::span<const size_t>& top_row,
@@ -298,39 +374,30 @@ private:
             const size_t br = bottom_row[c+1];
             const size_t tr = top_row[c+1];
 
-            const size_t t1_idx = active_triangles_.size();
-            active_triangles_.emplace_back(tl, bl, br);
+            size_t t1 = allocateTriangle(tl, bl, br);
+            size_t t2 = allocateTriangle(tl, br, tr);
 
-            const size_t t2_idx = active_triangles_.size();
-            active_triangles_.emplace_back(tl, br, tr);
+            // Wire into flat edge arrays (incremental, no rebuilds needed)
+            addTriToEdge(tl, bl, t1); // vert
+            addTriToEdge(bl, br, t1); // horiz
+            addTriToEdge(br, tl, t1); // diag
 
-            // Build edge-to-triangle map using spatial hash for fast lookups
-            addEdgeToMap(tl, bl, t1_idx);
-            addEdgeToMap(bl, br, t1_idx);
-            addEdgeToMap(br, tl, t1_idx);
-
-            addEdgeToMap(tl, br, t2_idx);
-            addEdgeToMap(br, tr, t2_idx);
-            addEdgeToMap(tr, tl, t2_idx);
+            addTriToEdge(tl, br, t2); // diag (shared with t1)
+            addTriToEdge(br, tr, t2); // vert
+            addTriToEdge(tr, tl, t2); // horiz
         }
     }
 
-    void addEdgeToMap(size_t a, size_t b, size_t tri_idx) {
-        Edge edge(a, b);
-        edge_to_triangles_[edge].push_back(tri_idx);
-    }
-
-    const std::vector<size_t>* getTrianglesForEdge(size_t a, size_t b) const {
-        auto it = edge_to_triangles_.find(Edge(a, b));
-        return (it != edge_to_triangles_.end()) ? &it->second : nullptr;
-    }
+    // -------------------------------------------------------------------------
+    // Simplification
+    // -------------------------------------------------------------------------
 
     void simplifyAndFinalize() {
         size_t finalize_until_row = finalized_row_ + 1;
 
         simplifyActiveRegion(finalized_row_, finalize_until_row);
 
-        // Move finalized triangles out and deallocate (updates edge map incrementally)
+        // Move finalized triangles out and deallocate.
         for (size_t i = 0; i < active_triangles_.size(); ++i) {
             const auto& tri = active_triangles_[i];
             if (!tri.active) continue;
@@ -343,11 +410,11 @@ private:
 
             if (min_row < finalize_until_row) {
                 finalized_triangles_.push_back(tri);
-                deallocateTriangle(i);
+                deallocateTriangle(i);  // Updates edge slots incrementally
             }
         }
 
-        // Clear finalized row from quantized grid
+        // Clear finalized row from vertex grid.
         for (size_t column = 0; column < cols_; ++column) {
             active_grid_[gridIndex(finalized_row_, column)] = -1;
         }
@@ -401,7 +468,6 @@ private:
                 deallocateTriangle(idx);  // Incremental edge map update
             }
         }
-        // NO rebuildEdgeMap() needed — indices remain stable via free-list reuse
     }
 
     // Fast error computation using spatial hash for neighborhood queries
@@ -428,40 +494,33 @@ private:
         // Fast dihedral computation via edge map (O(1) per edge)
         double max_dihedral = 0.0;
 
-        auto checkEdge = [&](size_t a, size_t b) {
-            const auto tris = getEdgeTris(a, b);
-            if (!tris) return;
-            for (size_t ot : *tris) {
-                if (ot == tri_idx || !active_triangles_[ot].active) continue;
+        auto checkNeighbor = [&](size_t va, size_t vb) {
+            size_t ot = edgeOther(classifyEdge(va, vb), tri_idx);
+            if (ot == INVALID) return;
 
-                const auto& other = active_triangles_[ot];
-                const Point& op0 = all_points_[other.v0];
-                const Point& op1 = all_points_[other.v1];
-                const Point& op2 = all_points_[other.v2];
+            const auto& other = active_triangles_[ot];
+            const Point& q0 = all_points_[other.v0];
+            const Point& q1 = all_points_[other.v1];
+            const Point& q2 = all_points_[other.v2];
 
-                const double oax = op1.x - op0.x;
-                const double oay = op1.y - op0.y;
-                const double oaz = op1.z - op0.z;
-                const double obx = op2.x - op0.x;
-                const double oby = op2.y - op0.y;
-                const double obz = op2.z - op0.z;
+            double oax = q1.x - q0.x, oay = q1.y - q0.y, oaz = q1.z - q0.z;
+            double obx = q2.x - q0.x, oby = q2.y - q0.y, obz = q2.z - q0.z;
 
-                double onx = oay * obz - oaz * oby;
-                double ony = oaz * obx - oax * obz;
-                double onz = oax * oby - oay * obx;
-                const double olen = std::sqrt(onx*onx + ony*ony + onz*onz);
+            double onx = oay * obz - oaz * oby;
+            double ony = oaz * obx - oax * obz;
+            double onz = oax * oby - oay * obx;
+            double olen = std::sqrt(onx*onx + ony*ony + onz*onz);
 
-                if (olen > 1e-10) {
-                    onx /= olen; ony /= olen; onz /= olen;
-                    const double dot = std::abs(nx * onx + ny * ony + nz * onz);
-                    max_dihedral = std::max(max_dihedral, std::acos(std::clamp(dot, -1.0, 1.0)));
-                }
+            if (olen > 1e-10) {
+                onx /= olen; ony /= olen; onz /= olen;
+                double dot = std::abs(nx * onx + ny * ony + nz * onz);
+                max_dihedral = std::max(max_dihedral, std::acos(std::clamp(dot, -1.0, 1.0)));
             }
         };
 
-        checkEdge(tri.v0, tri.v1);
-        checkEdge(tri.v1, tri.v2);
-        checkEdge(tri.v2, tri.v0);
+        checkNeighbor(tri.v0, tri.v1);
+        checkNeighbor(tri.v1, tri.v2);
+        checkNeighbor(tri.v2, tri.v0);
 
         // Height variation
         const double height_var = std::max({
@@ -474,32 +533,12 @@ private:
         return area * (1.0 + max_dihedral * 2.0) * (1.0 + height_var);
     }
 
-    // Fast manifold preservation check using spatial hash
+    // Fast manifold check — zero hash lookups, pure arithmetic + array access.
     bool canRemoveTriangle(size_t idx) const {
         const auto& tri = active_triangles_[idx];
-
-        auto hasActiveNeighbor = [&](size_t a, size_t b) -> bool {
-            const auto tris = getEdgeTris(a, b);
-            if (!tris) return false;
-            for (size_t t : *tris) {
-                if (t != idx && active_triangles_[t].active) return true;
-            }
-            return false;
-        };
-
-        return hasActiveNeighbor(tri.v0, tri.v1) &&
-               hasActiveNeighbor(tri.v1, tri.v2) &&
-               hasActiveNeighbor(tri.v2, tri.v0);
-    }
-
-    void rebuildEdgeMap() {
-        edge_to_triangles_.clear();
-        for (size_t i = 0; i < active_triangles_.size(); ++i) {
-            const auto& tri = active_triangles_[i];
-            addEdgeToMap(tri.v0, tri.v1, i);
-            addEdgeToMap(tri.v1, tri.v2, i);
-            addEdgeToMap(tri.v2, tri.v0, i);
-        }
+        return edgeHasOther(classifyEdge(tri.v0, tri.v1), idx) &&
+               edgeHasOther(classifyEdge(tri.v1, tri.v2), idx) &&
+               edgeHasOther(classifyEdge(tri.v2, tri.v0), idx);
     }
 
     // Compact output: remap point indices to remove unused points
@@ -558,12 +597,16 @@ private:
     // Quantized grid: direct (row, col) → vertex index mapping
     std::vector<int64_t> active_grid_;
 
-    // Incremental edge map: no full rebuilds needed
-    std::unordered_map<Edge, std::vector<size_t>, EdgeHash> edge_to_triangles_;
+    // Flat edge arrays — 2 entries per slot (max 2 triangles per edge)
+    std::vector<size_t> vert_edges_;   // vertical:   (r,c) -- (r+1,c)
+    std::vector<size_t> horiz_edges_;  // horizontal: (r,c) -- (r,c+1)
+    std::vector<size_t> diag_edges_;   // diagonal:   (r,c) -- (r+1,c+1)
 
     // Free-list for stable triangle indices
     std::vector<size_t> free_triangle_slots_;
     size_t active_triangle_count_;
+
+    static constexpr size_t INVALID = static_cast<size_t>(-1);
 };
 
 Triangulator::Kimi::DEMTriangulationResult Triangulator::Kimi::triangulateDEM(

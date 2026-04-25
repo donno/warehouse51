@@ -12,7 +12,10 @@
 // STATUS       : Incomplete -Takes too long.
 //
 // The resulting 3D mesh should not simply contain 3601 * 3601 points (or 1201
-// by 1202 for STRM3) and should be simplfied.
+// by 1202 for STRM3) and should be simplified.
+//
+// TODO: Convert from WGS84 to Web Mercator or similar if PROJ is available,
+// https://proj.org/en/stable/
 //
 // Ideals:
 // - Dual Contouring
@@ -27,6 +30,13 @@
 // - Use large lanage model (LLM) such as Kimi 2.6 to produce an algorithm.
 //   The algorithm is implemented in triangulator_kimi.cpp.
 //
+// For code coverage / profiling on Linux:
+// $ g++ -std=c++20 --coverage -o build/hgt_to_mesh hgt_to_mesh.cpp hgt.cpp \
+//      triangulator_kimi.cpp
+// $ lcov --directory . --capture --output-file hgt_to_mesh.info
+// $ genhtml --output-directory build/coverage hgt_to_mesh.info
+// TODO: Update above command to set the prefix/root to the source folder and
+// don't include C++ standard library.
 //===----------------------------------------------------------------------===//
 
 #include "hgt.hpp"
@@ -69,7 +79,7 @@ int main(int argc, const char* argv[])
 
         std::filesystem::path output(filename);
         output.replace_extension(".ply");
-        writePLY(output.string().c_str(), result);
+        Triangulator::Kimi::writePLY(output.string().c_str(), result);
     }
     catch (const std::runtime_error& Error)
     {
