@@ -22,20 +22,23 @@ Minecraft is a registered trademark owned by Microsoft Corporation.
 # dependencies = [
 #   "nbt",
 #   "numpy",
+#   "tifffile",
 # ]
 # ///
 
 # Standard library imports
 import argparse
+import itertools
 import pathlib
 
 # Third party imports
-from nbt.world import WorldFolder
+from nbt.world import WorldFolder, InconceivedChunk
 from nbt.chunk import Chunk
 
 # If they believe np would be a better name they should have named it np
 # instead of calling it numpy.
 import numpy  # noqa: ICN001
+import tifffile
 
 NON_SOLID_BLOCK_TYPES = [0, 8, 9, 10, 11, 38, 37, 32, 31]
 """The (type) index of a non-solid block.
@@ -110,19 +113,11 @@ def determine_top_most_block_for_chunk(
     return depths, blocks
 
 
-def determine_top_most_block(
+def _debug(
     world: WorldFolder,
     *,
     exclude_above_ground_types: bool,
 ) -> None:
-    """Determine the top most block.
-
-    By default this ignores air.
-
-    If ignore exclude_above_ground_types is True then it ignores blocks such as
-    leaves and trees, thereby making it suitable to produce a digital terrain
-    model.
-    """
     for chunk in world.iter_chunks():
         depths, blocks = determine_top_most_block_for_chunk(
             chunk,
@@ -136,10 +131,72 @@ def determine_top_most_block(
         print(f"World: {world_x},{world_z}")
         print(blocks, "@", depths, sep="\n")
 
-    # The easy/quick way to write this out to a TIFF file would be to create
-    # 16 by 16 tiles in the resulting TIFF file and thus write each tile out.
 
-    print("TODO: Creating the TIFF file is not yet implemented.")
+def write_digital_elevation_model(
+    world: WorldFolder,
+    destination: pathlib.Path,
+    *,
+    exclude_above_ground_types: bool,
+) -> None:
+    """Write a digital elevation mode representing world to destination.
+
+    The destination will be a TIFF (Tagged Image File Format) file.
+
+    If ignore exclude_above_ground_types is True then it ignores blocks such as
+    leaves and trees, thereby making it suitable to produce a digital terrain
+    model rather than digital surface model.
+    """
+    model_type = "terrain" if exclude_above_ground_types else "surface"
+    metadata = {
+        "Description": f"A digital {model_type} model (digital elevation "
+        "model) created from a Minecraft world.",
+    }
+
+    def chunks(world: WorldFolder) -> itertools.product[tuple[int, int]]:
+        bounding_box = world.get_boundingbox()
+        xs = range(bounding_box.minx, bounding_box.maxx)
+        zs = range(bounding_box.minz, bounding_box.maxz)
+        return itertools.product(xs, zs)
+
+    # # The easy/quick way to write this out to a TIFF file would be to create
+    # # 16 by 16 tiles in the resulting TIFF file and thus write each tile out.
+
+    def tiles(world: WorldFolder):
+        """Generate the data for the tiles."""
+        for chunk_x, chunk_z in chunks(world):
+            try:
+                chunk = world.get_chunk(chunk_x, chunk_z)
+                depths, _ = determine_top_most_block_for_chunk(
+                    chunk,
+                    exclude_above_ground_types=exclude_above_ground_types,
+                )
+                yield depths
+            except InconceivedChunk:
+                # The chunk has not been generated so treat it as empty / no
+                # data
+                #
+                # TODO: Confirm how tifffile handles this case.
+                # It doesn't seem to support yielding None here.
+                yield numpy.zeros((16, 16))
+
+    bounding_box = world.get_boundingbox()
+    shape = (
+        16 * (bounding_box.maxx - bounding_box.minx),
+        16 * (bounding_box.maxz - bounding_box.minz),
+        1,  # For RGB this would be a 3
+    )
+
+    tifffile.imwrite(
+        destination,
+        tiles(world),
+        tile=(16, 16),
+        shape=shape,
+        dtype=numpy.float64,  # Metres
+        bigtiff=True,
+        compression="zlib",
+        compressionargs={"level": 8},
+        metadata=metadata,
+    )
 
 
 if __name__ == "__main__":
@@ -177,4 +234,8 @@ if __name__ == "__main__":
 
     arguments = parser.parse_args()
     world = WorldFolder(arguments.world_directory)
-    determine_top_most_block(world, exclude_above_ground_types=True)
+    write_digital_elevation_model(
+        world,
+        arguments.output,
+        exclude_above_ground_types=arguments.dtm,
+    )
