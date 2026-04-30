@@ -66,6 +66,15 @@ class MinixFileSystem(fsspec.AbstractFileSystem):
             return {"name": path, "size": 0, "type": "directory"}
         return {"name": path, "size": inode.file_size, "type": "file"}
 
+    def _open(
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        autocommit=True,
+        cache_options=None,
+        **kwargs):
+        return self.system.open(path, mode)
 
 if __name__ == "__main__":
     fs = MinixFileSystem(pathlib.Path.cwd() / "minixfs.raw")
@@ -110,8 +119,14 @@ if __name__ == "__main__":
     print("Disk usage of /", fs.disk_usage("/"))
 
     # TODO: Handle this
-    # welcome = fs.cat_file("/users/ast/welcome")
-    # print(welcome)
+    welcome = fs.cat_file("/users/ast/welcome")
+    print(welcome)
 
-    # welcome = fs.cat("/users/ast/welcome")
-    # print(welcome)
+    welcome = fs.cat("/users/ast/welcome")
+    print(welcome)
+
+    welcome = fs.cat_file("/users/ast/books")
+    print(welcome)
+
+    welcome = fs.cat("/users/ast/books")
+    print(welcome)

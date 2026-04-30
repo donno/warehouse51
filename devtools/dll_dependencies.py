@@ -132,15 +132,19 @@ def find_dependencies(
             with cache_result_path.open("r") as reader:
                 chain_as_json = json.load(reader)
         else:
-            output = subprocess.check_output(
-                [
-                    os.fspath(tool_exe),
-                    "-json",
-                    "-depth", "2",
-                    "-chain", os.fspath(dll),
-                ],
-                text=True,
-            )
+            try:
+                output = subprocess.check_output(
+                    [
+                        os.fspath(tool_exe),
+                        "-json",
+                        "-depth", "2",
+                        "-chain", os.fspath(dll),
+                    ],
+                    text=True,
+                )
+            except KeyboardInterrupt:
+                print(f"Cancelled while looking up {dll}")
+                raise
 
             if cache_result:
                 with cache_result_path.open("w") as writer:

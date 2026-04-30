@@ -1,13 +1,17 @@
+# The standard Minecraft server and nothing else.
+#
 # podman build -t minecraft-server:1.21.11-java25-debian13 --dockerfile=Containerfile.mc-server
-# podman run -p 25565:12222 localhost/minecraft-server:1.21.11-java25-debian13
+# podman run -p 12222:25565 -v mc-world:/server/world localhost/minecraft-server:1.21.11-java25-debian13
 #
 # Libraries will be unpacked on first run.
+# No health check or extra admin plugins etc are set-up.
 FROM gcr.io/distroless/java25-debian13:latest
-ADD https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar /server/minecraft_server.1.21.11.jar 
+ADD --checksum=sha256:f83b8e093865806f931c7e34aae41b177d4c076335263dd124c75d6d65dd1726 https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar /server/minecraft_server.1.21.11.jar 
 COPY eula.txt /server/eula.txt
 EXPOSE 25565/tcp
 WORKDIR /server
+VOLUME /server/world
 ENTRYPOINT ["java", "-Xmx1024M", "-Xms1024M", "-jar", "/server/minecraft_server.1.21.11.jar", "nogui"]
 
-# TODO: Setup volume for storing the world.
+
 

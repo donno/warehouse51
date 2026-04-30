@@ -53,7 +53,7 @@ class Company:
     domain: str
     """The domain name for the company."""
     # TODO This may be derived instead for company name, or it might need a
-    # domain name style to decide it.
+    # domain name style to decide7t.
 
     user_name_style: UserNameStyle
     """The style of the usernames at the company.
@@ -105,7 +105,7 @@ def adjust_name(name: str) -> str:
 
     For example:
         "ACT Remainder - " in "ACT Remainder - Cotter River".
-        (State) i.e. " (ACT)"
+        (State) e.g " (ACT)"
     """
     name = name.partition("(")[0]
     before, _, after = name.partition(" - ")
@@ -164,9 +164,7 @@ def generate_company_names(n: int) -> list[str]:
     # The original idea was to use the area of the suburb to determine the
     # the size of the company but that was just to wide ranging.
     choices = [
-        name
-        for name, area in merge_state_suburbs()
-        if area > 0 and " of " not in name
+        name for name, area in merge_state_suburbs() if area > 0 and " of " not in name
     ]
     return random.choices(choices, k=n)
 
@@ -192,8 +190,9 @@ def generate_companies(n: int) -> list[Company]:
     names = generate_company_names(n)
 
     # Make EMPLOYEE_ID a rare option, as its is rather strange.
-    weights = [1 if style is UserNameStyle.EMPLOYEE_ID else 500
-               for style in UserNameStyle]
+    weights = [
+        1 if style is UserNameStyle.EMPLOYEE_ID else 500 for style in UserNameStyle
+    ]
     username_styles = random.choices(list(UserNameStyle), weights=weights, k=n)
 
     return [

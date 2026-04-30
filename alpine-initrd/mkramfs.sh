@@ -1,11 +1,15 @@
 #!/bin/sh
 #
 # This ended up resembling the following a lot:
-# https://github.com/marcov/firecracker-initrd/blob/master/container/build-initrd-in-ctr.sh
+# https://github.com/marcov/firecracker-initrd/blob/master/container/build-initrd-in-ctr.shmkramfs.sh 
+#
+# Run via podman:
+# podman run --rm --workdir /work -v .:/work alpine:3.22 ./mkramfs.sh
 
 ALPINE_VERSION=3.22
 ARCH=x86_64
 BASE_URI="https://dl-cdn.alpinelinux.org/alpine/v$ALPINE_VERSION"
+BASE_URI="https://apk.cgr.dev/chainguard"
 ENABLE_NETWORKING=1
 FLAVOUR="$1"
 if [ "$FLAVOUR" = "--help" ]; then
@@ -22,6 +26,7 @@ fi
 
 MINIMAL_PACKAGES="alpine-baselayout alpine-conf alpine-release busybox busybox-mdev-openrc busybox-openrc busybox-suid musl-utils openrc"
 STANDARD_PACKAGES="alpine-base openrc"
+STANDARD_PACKAGES="wolfi-base chainguard-keys mount"
 # The alpine-base package depends on openrc so that is potential redundant.
 
 if [ -z "$FLAVOUR" ]; then
@@ -31,7 +36,7 @@ fi
 
 # Additional packages are needed for networking.
 if [ "$ENABLE_NETWORKING" -gt 0 ]; then
-  STANDARD_PACKAGES="$STANDARD_PACKAGES iptables iproute2 openssh openssh-server-pam"
+  STANDARD_PACKAGES="$STANDARD_PACKAGES iptables iproute2 openssh"
 fi
 
 [ "$FLAVOUR" = "minimal" ] && PACKAGES="$MINIMAL_PACKAGES" || PACKAGES="$STANDARD_PACKAGES"
@@ -48,7 +53,7 @@ echo Downloading base system with apk.
 
 if [ -f "packages.$FLAVOUR" ]
 then
-  xargs -a "packages.$FLAVOUR" apk --arch "$ARCH" -X "$BASE_URI/main/" -X "$BASE_URI/community/" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
+  xargs -a "packages.$FLAVOUR" apk --arch "$ARCH" -X "$BASE_URI" --root /rootfs --initdb --no-cache --allow-untrusted add $PACKAGES
 elif [ "$FLAVOUR" = "minimal" ] || [ "$FLAVOUR" = "plain" ]
 then
   # This is done second to allow for packages.minimal and packages.plain to
@@ -138,8 +143,10 @@ then
   rm "/rootfs/configure.inside.$FLAVOUR.sh"
 fi
 
-(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > "/work/initrdfs.$FLAVOUR" && cd - >/dev/null) || exit 1
+(cd /rootfs && find . -print0 | cpio --null --create --verbose --format=newc > "/work/initrdfs.$FLAVOUR.wolfi" && cd - >/dev/null) || exit 1
 
+echo
 echo Usage example
-echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd "initrdfs.$FLAVOUR"
+echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd "initrdfs.$FLAVOUR.wolfi"
+echo qemu-system-x86_64 -m 512 -kernel vmlinuz-virt -initrd "initrdfs.$FLAVOUR.wolfi --append "console=ttyS0" -nographic"
 

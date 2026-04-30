@@ -165,6 +165,9 @@ def assign_people_to_company(company_count: int, employee_count: int) -> list[in
     reserved_for_largest_company = 500
     spare = employee_count - minimum_employees_assigned - reserved_for_largest_company
 
+    print("minimum_employees_assigned", minimum_employees_assigned)
+    print("spare", spare)
+
     if spare < 0:
         raise ValueError(
             "Either too many companies, too few people or weighting are off."
@@ -363,7 +366,7 @@ if __name__ == "__main__":
     companies = generate_companies(arguments.companies)
 
     if arguments.json:
-        print(json.dumps(generate_full_description(companies, user_names), indent=2))
+        json.dumps(generate_full_description(companies, user_names), indent=2)
     else:
         print("Companies")
         print("=========")
@@ -374,3 +377,4 @@ if __name__ == "__main__":
         print("=====")
         for names in user_names:
             print(*names)
+

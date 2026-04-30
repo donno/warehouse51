@@ -952,6 +952,11 @@ class PropertyID:
     See [MS-ONESTORE] Section 2.6.6.
     """
 
+
+
+
+
+
     id: int
     """An unsigned integer that specifies the identity of this property.
 
@@ -1512,6 +1517,12 @@ def read_fragment(
         reference.offset,
         reference.size,
         )
+    # TODO: Consider adding checks to ensure with bounded reader you can
+    # only read within the area specified by the reference.
+    # class BoundedReader:
+    #     def __init__(self, source):
+    #         self.source = source
+
     reader.seek(reference.offset)
     data = reader.read(reference.size)
 
@@ -1584,6 +1595,7 @@ def read_file_List(reader, reference: FileChunkReference) -> list:
     return file_nodes
 
 
+
 def find_types(nodes: list, file_node_type: type):
     next_nodes = nodes[:]
     while next_nodes:
@@ -1619,7 +1631,7 @@ if __name__ == '__main__':
 
         reference = header.file_node_list_root_reference
         file_nodes = read_file_List(reader, reference)
-        for node in file_nodes:
+        for node in []:
             print(node)
             for child in node.children:
                 print(f"    {child}")

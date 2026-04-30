@@ -149,8 +149,11 @@ def extraction_list(
 
 
 if __name__ == "__main__":
-    with open("extraction.list", "w") as writer:
-        for item in extraction_list(things(filter_out=not_public_domain)):
-            writer.write(item)
-            writer.write("\n")
-    print("tar xf Thingi10K.tar.gz --files-from extraction.list")
+    # with open("extraction.list", "w") as writer:
+    #     for item in extraction_list(things(filter_out=not_public_domain)):
+    #         writer.write(item)
+    #         writer.write("\n")
+    # print("tar xf Thingi10K.tar.gz --files-from extraction.list")
+
+    for thing in things_context():
+        print(thing)

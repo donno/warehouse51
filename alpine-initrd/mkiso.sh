@@ -1,6 +1,8 @@
 #!/bin/sh
 # Create a bootable ISO from Kernel image and initial RAM disk.
 # Reference: https://superuser.com/a/1613141
+#
+# TODO: Consider splitting this into mkiso-efi.sh and mkiso-bios.sh.
 
 if [ -z "$1" ]
 then
@@ -13,11 +15,10 @@ else
   exit 1
 fi
 
-if ! command -v genisoimage > /dev/null
+if [ "$MODE" = "efi " ]
 then
-  echo "missing: genisoimage program"
-  echo "Install with: apk add cdrkit"
-  exit 1
+  sh mkiso.efi.sh || exit $?
+  exit 0
 fi
 
 if [ ! -f initrdfs ]
@@ -36,11 +37,6 @@ fi
 
 mkdir -p iso/boot/grub
 
-if [ ! "$MODE" = "bios" ]
-then
-  echo "Only bios supported to date. efi coming soon."
-  exit 4
-fi
 echo "Copying Kernel and initial RAM filesystem."
 cp vmlinuz-virt iso/boot/
 cp initrdfs iso/boot/

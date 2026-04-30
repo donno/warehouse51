@@ -26,7 +26,7 @@ std::array<SDL_Texture*, unique_piece_count> LoadPieces(
   auto piece = pieces.begin();
   for (auto filename : filenames)
   {
-    const auto path = std::string("assets/celtic/") + filename;
+    const auto path = std::string("assets/merida/") + filename;
     std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(
       SDL_IOFromFile(path.c_str(), "r"), SDL_CloseIO);
 
@@ -213,7 +213,7 @@ int main() {
   const auto white_pieces = LoadPieces(piece_light_filenames, renderer);
   const auto black_pieces = LoadPieces(piece_dark_filenames, renderer);
 
-  auto board = chess::Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  auto board = chess::Board("5rk1/1R3pb1/p2p2p1/B1p1nnNp/2P4P/3P1PPB/4PK2/8 b - - 5 26");
 
   SDL_Surface *surface;
   for (SDL_Event event; true;) {

@@ -112,6 +112,13 @@ def list_packages(index: os.PathLike | str, verbose: bool = False):
             )
 
 
+def list_package_downloads(index: os.PathLike | str, base_url: str):
+    """Print out the download URIs to the packages."""
+    for package in packages(index):
+        apk_url = f'{base_url}/{package.name}-{package.version}.apk'
+        print(apk_url)
+
+
 def description(index: os.PathLike | str):
     """Return the description from the index package."""
     with tarfile.open(index) as tarball:
@@ -135,4 +142,7 @@ if __name__ == "__main__":
         help="Show additional information",
     )
     arguments = parser.parse_args()
-    list_packages(arguments.index, arguments.verbose)
+    #list_packages(arguments.index, arguments.verbose)
+    list_package_downloads(arguments.index, 'https://packages.wolfi.dev/os/x86_64')
+
+    #https://packages.wolfi.dev/os/x86_64/APKINDEX.tar.gz
