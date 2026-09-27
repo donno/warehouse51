@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM alpine:3.19.1 as client
+FROM public.ecr.aws/docker/library/alpine:3.24.2 as client
 # The default mirror/CDN Fastly has issues with MTU size.
 # https://github.com/gliderlabs/docker-alpine/issues/307#issuecomment-427256504
 # To work around this, pull from a mirror in my home country.
