@@ -7,14 +7,20 @@ Requires API key from https://opendata.transport.nsw.gov.au
 # dependencies = [
 #   "geojson",
 #   "requests",
+#   "aiohttp",
 # ]
 # ///
 import argparse
+import asyncio
 import dataclasses
 import typing
 
+import aiohttp
 import geojson
 import requests
+
+API_CAMERA_URL = "https://api.transport.nsw.gov.au/v1/live/cameras"
+"""The URL to the API for querying the traffic cameras."""
 
 
 class CameraProperties(typing.TypedDict):
@@ -44,21 +50,11 @@ class Camera:
     """Properties of the camera."""
 
 
-def cameras(*, api_key: str) -> list[Camera]:
-    """Return the cameras from Transport New South Wales API."""
-    response = requests.get(
-        "https://api.transport.nsw.gov.au/v1/live/cameras",
-        headers={
-            "Authorization": f"apiKey {api_key}",
-        },
-        timeout=10.0,
-    )
-    response.raise_for_status()
-    features = geojson.loads(response.content)
-
+def _response_to_cameras(content: str) -> list[Camera]:
+    """Decode the response from the HTTP API request to a list of cameras."""
     # The rights could be queried with features["rights"] and included with
     # each camera.
-
+    features = geojson.loads(content)
     cameras: list[Camera] = []
     for feature in features["features"]:
         if feature["type"] != "Feature":
@@ -82,14 +78,53 @@ def cameras(*, api_key: str) -> list[Camera]:
     return cameras
 
 
+def fetch_cameras(*, api_key: str) -> list[Camera]:
+    """Return the cameras from Transport New South Wales API."""
+    response = requests.get(
+        API_CAMERA_URL,
+        headers={
+            "Authorization": f"apiKey {api_key}",
+        },
+        timeout=10.0,
+    )
+    response.raise_for_status()
+    return _response_to_cameras(response.content)
+
+
+async def fetch_cameras_async(*, api_key: str) -> list[Camera]:
+    """Return the cameras from Transport New South Wales API."""
+    async with aiohttp.ClientSession() as session, session.get(
+        API_CAMERA_URL,
+        headers={
+            "Authorization": f"apiKey {api_key}",
+        },
+    ) as response:
+        response.raise_for_status()
+        return _response_to_cameras(await response.text())
+
+
 def main() -> None:
     """Entry point for printing out details about the cameras."""
     parser = argparse.ArgumentParser(
         "Show location of traffic cameras for NSW",
     )
     parser.add_argument("api_key")
+    parser.add_argument(
+        "--async",
+        dest="async_requests",
+        action="store_true",
+        # This will matter more when we can fetch multiple cameras images at
+        # once.
+        help="Issue the request asynchronously",
+    )
     arguments = parser.parse_args()
-    for camera in cameras(api_key=arguments.api_key):
+
+    if arguments.async_requests:
+        cameras = asyncio.run(fetch_cameras_async(api_key=arguments.api_key))
+    else:
+        cameras = fetch_cameras(api_key=arguments.api_key)
+
+    for camera in cameras:
         print(camera)
 
 
