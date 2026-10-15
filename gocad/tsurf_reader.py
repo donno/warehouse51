@@ -173,6 +173,14 @@ def read_nodes(reader):
         elif keyword == 'PROPERTY_CN':
             # Start of a property and will end with END_PROPERTY_CN.
             properties[parts[0]] = read_property(reader, 'CN')
+        elif keyword == 'TFACE':
+            # Start of a new TFACE. Unsure its purpose.
+            #
+            # It might simply be to group them together, if the node IDs
+            # weren't provided, I would have assumed it may have been to
+            # restart vertex indexes so a triangle (0 1, 2) could refer to two
+            # different vertices depending on where it appeared.
+            pass
         else:
             # VRTX, ATOM and PVRTX are main cases.
             raise NotImplementedError(f"Unexpected kind {keyword}")
