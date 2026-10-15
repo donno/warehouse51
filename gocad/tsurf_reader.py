@@ -60,6 +60,18 @@ def read_group(reader):
     return values
 
 
+def decode_colour(value: str) -> tuple[float, float, float]:
+    """Decode the colour from the given string value.
+
+    >>> decode_colour('0.894118 0.294118 0.494118')
+    (0.894118, 0.294118, 0.494118)
+    >>> decode_colour('0.93333334 0.0 0.93333334  1')
+    (0.93333334, 0.0, 0.93333334)
+    """
+    # TODO: Handle the 1 on the end, or at least warn that its being lost.
+    return tuple(float(c) for c in value.split(" ")[:3])
+
+
 def read_header(reader):
     line = reader.readline()
     if not line.startswith("HEADER {"):
@@ -75,7 +87,10 @@ def read_header(reader):
 
         if ":" in line:
             key, _, value = line.partition(":")
-            header[key] = value[:-1]
+            if key == '*solid*color':
+                header[key] = decode_colour(value[:-1])
+            else:
+                header[key] = value[:-1]
         elif line.endswith("{\n"):
             parts = line.split(" ")
             # children = read_group(reader)
@@ -328,7 +343,6 @@ def read(path):
             raise ValueError(f"Expected a version 1 file not {version_number}")
 
         header = read_header(reader)
-        print(header)
 
         if type_name == 'TSurf':
             groups = read_surface(reader)
@@ -372,7 +386,7 @@ def read(path):
         )
     )
     facets = numpy.fromiter(facet_iterable, dtype=numpy.dtype((int, 3)))
-    return points, facets
+    return header, points, facets
 
 
 if __name__ == "__main__":
